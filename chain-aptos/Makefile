@@ -4,6 +4,11 @@ APTOS_CLI_ARCH?=Linux-x86_64
 APTOS_CLI_ZIP=aptos-cli-$(APTOS_CLI_VERSION)-$(APTOS_CLI_ARCH).zip
 APTOS_CLI_URL=https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v$(APTOS_CLI_VERSION)/$(APTOS_CLI_ZIP)
 
+all: compile test
+
+test: aptos
+	./aptos move test --package-dir contracts
+
 compile: aptos
 	./aptos move compile --package-dir contracts
 

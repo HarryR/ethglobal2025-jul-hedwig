@@ -1,4 +1,8 @@
 chain-sui
 chain-aptos
+chain-near
 .move/
-
+.near-credentials/
+.rustup
+.cargo
+.config

@@ -1,2 +1,6 @@
 .wget-hsts
 .move/
+.near-credentials/
+.rustup
+.cargo
+.config

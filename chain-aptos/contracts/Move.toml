@@ -1,0 +1,17 @@
+[package]
+name = "example"
+version = "1.0.0"
+authors = []
+
+[addresses]
+hello_blockchain = "0x0"
+
+[dev-addresses]
+
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "mainnet"
+subdir = "aptos-framework"
+
+[dev-dependencies]

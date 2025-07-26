@@ -1,3 +1,4 @@
 aptos
 aptos-*.zip
 *.json
+build/

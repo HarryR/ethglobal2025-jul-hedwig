@@ -15,7 +15,10 @@ test: aptos
 	$(APTOS) move test --package-dir contracts
 
 build compile: aptos
-	$(APTOS) move compile --package-dir contracts
+	$(APTOS) move compile --save-metadata --package-dir contracts --dev
+
+deploy-devnet:
+	APTOS_CLI_PATH=$(APTOS) python3 deploy.py --network devnet --use-faucet --force-build
 
 # See: https://aptos.dev/network/nodes/localnet
 localnet:

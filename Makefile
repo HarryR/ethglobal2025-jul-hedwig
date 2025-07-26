@@ -8,6 +8,7 @@ docker-build:
 docker-shell:
 	docker run --rm -ti \
 		--network=host \
+		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(PWD):/src \
 		-e HISTFILE=/dev/null \
 		-e HOME=/src \

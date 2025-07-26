@@ -4,3 +4,8 @@
 .rustup
 .cargo
 .config
+.aptos/
+.cache/
+.local/
+.python_history
+old

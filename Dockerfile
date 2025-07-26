@@ -34,3 +34,7 @@ RUN apt install -y libudev-dev libdbus-1-dev jq
 
 # Required for ICP?
 RUN apt install -y libunwind-dev
+
+# Required for Aptos Python SDK
+RUN apt install -y python3-pip python3-pip-whl
+

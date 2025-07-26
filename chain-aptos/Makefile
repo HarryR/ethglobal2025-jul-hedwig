@@ -6,10 +6,13 @@ APTOS_CLI_URL=https://github.com/aptos-labs/aptos-core/releases/download/aptos-c
 
 all: compile test
 
+python-deps:
+	pip3 install --user --break-system-packages -r requirements.txt
+
 test: aptos
 	./aptos move test --package-dir contracts
 
-compile: aptos
+build compile: aptos
 	./aptos move compile --package-dir contracts
 
 download: $(APTOS_CLI_ZIP)

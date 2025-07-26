@@ -6,3 +6,5 @@ chain-near
 .rustup
 .cargo
 .config
+.cache
+.local

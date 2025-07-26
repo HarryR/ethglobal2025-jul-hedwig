@@ -55,15 +55,12 @@ class HTLCOrder:
         serializer = Serializer()
         
         # Serialize fields in exact order as defined in Move struct
-        serializer.struct(self.user_address)                    # address
-        serializer.struct(self.resolver_address)                # address  
         serializer.to_bytes(self.user_public_key)              # vector<u8>
         serializer.to_bytes(self.resolver_public_key)          # vector<u8>
         serializer.u64(self.user_amount)                       # u64
         serializer.u64(self.resolver_amount)                   # u64
         serializer.struct(self.venue_address)                  # address
         serializer.u64(self.venue_fee)                         # u64
-        serializer.struct(self.arbitrator_address)             # address
         serializer.to_bytes(self.arbitrator_public_key)        # vector<u8> - ADDED THIS
         serializer.u64(self.arbitrator_attention_fee)          # u64
         serializer.u64(self.arbitrator_usage_fee)              # u64
@@ -260,15 +257,6 @@ def main():
     import json
     with open("htlc_test_data.json", "w") as f:
         json.dump(order_data, f, indent=2)
-    
-    #with open("move_test_constants.move", "w") as f:
-    #    f.write(move_test_code)
-    
-    print("\n=== Files Created ===")
-    print("1. htlc_test_data.json - Complete test data")
-    print("2. move_test_constants.move - Move test code to embed")
-    
-    return order_data, move_test_code
 
 if __name__ == "__main__":
-    order_data, move_code = main()
+    main()

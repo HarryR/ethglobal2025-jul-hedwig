@@ -5,9 +5,7 @@ authors = []
 upgrade_policy = "immutable"
 
 [addresses]
-hello_blockchain = "0x0"
 htlc_addr = "0x1"
-htlc_verify_test1 = "0x2"
 
 [dev-addresses]
 

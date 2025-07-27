@@ -5,12 +5,10 @@ authors = []
 upgrade_policy = "immutable"
 
 [addresses]
-htlc_addr = "_"
-htlc_dst = "_"
+htlc = "_"
 
 [dev-addresses]
-htlc_addr = "0xDEADBEEF001"
-htlc_dst = "0xDEADBEEF002" 
+htlc = "0xDEADDADFEEDBEEFCAFEADDEDE1FB100DB00B5"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-framework.git"

@@ -264,10 +264,6 @@ async def deploy_contract(args: argparse.Namespace) -> AccountAddress:
     # Initialize clients
     rest_client = DeploymentClient(network_config["node_url"])
     
-    # Check balance
-    balance = await rest_client.account_balance(deployer.address())
-    print(f"💳 Account balance: {balance} octas")
-    
     # Parse named addresses - automatically map all addresses from Move.toml to deployer address
     package_named_addresses = get_named_addresses_from_toml(args.package_dir)
     named_addresses = {}
@@ -385,6 +381,10 @@ async def deploy_contract(args: argparse.Namespace) -> AccountAddress:
         )
         print(f"💰 Funding account with {args.fund_amount} octas...")
         await faucet_client.fund_account(deployer.address(), args.fund_amount)
+
+    # Check balance
+    balance = await rest_client.account_balance(deployer.address())
+    print(f"💳 Account balance: {balance} octas")
     
     # Deploy package
     print("🚢 Publishing package...")

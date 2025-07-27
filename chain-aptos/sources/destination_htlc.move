@@ -1,4 +1,4 @@
-module htlc_dst::destination_htlc {
+module htlc::destination_htlc {
     use aptos_framework::coin::{Self, Coin};
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::timestamp;
@@ -80,7 +80,7 @@ module htlc_dst::destination_htlc {
 
     /// Internal helper to get the resource account signer
     fun get_resource_signer(): signer acquires SignerCapability {
-        let signer_cap = &borrow_global<SignerCapability>(@htlc_addr).cap;
+        let signer_cap = &borrow_global<SignerCapability>(@htlc).cap;
         account::create_signer_with_capability(signer_cap)
     }
 

@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Any, Dict, Optional
 
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 from aptos_sdk.account import Account
 from aptos_sdk.account_address import AccountAddress
 from aptos_sdk.async_client import FaucetClient, RestClient
@@ -169,8 +169,10 @@ class FillDaemon:
     async def initialize(self, fund_amount: int = 10_000_000):
         """Initialize the daemon by funding the account if needed."""
         if self.use_faucet and self.faucet_client:
-            print(f"💰 Funding resolver account with {fund_amount} octas...")
-            await self.faucet_client.fund_account(self.resolver.address(), fund_amount)
+            balance = await self.rest_client.account_balance(self.resolver.address())
+            if balance < fund_amount:
+                print(f"💰 Funding resolver account with {fund_amount} octas...")
+                await self.faucet_client.fund_account(self.resolver.address(), fund_amount)
             
             # Check balance
             balance = await self.rest_client.account_balance(self.resolver.address())
@@ -237,64 +239,57 @@ class FillDaemon:
         deadline: int
     ) -> Dict[str, Any]:
         """Create an HTLC and return transaction information."""
-        try:
-            # Convert hex string to bytes
-            if secret_hash.startswith("0x"):
-                secret_hash = secret_hash[2:]
-            secret_hash_bytes = bytes.fromhex(secret_hash)
-            
-            user_addr = AccountAddress.from_str(user_address)
-            
-            print(f"🔒 Creating HTLC:")
-            print(f"   Secret hash: 0x{secret_hash}")
-            print(f"   User address: {user_address}")
-            print(f"   Amount: {amount} octas")
-            print(f"   Deadline: {deadline}")
-            
-            # Submit transaction
-            txn_hash = await self.rest_client.create_htlc(
-                self.contract_address,
-                self.resolver,
-                secret_hash_bytes,
-                user_addr,
-                amount,
-                deadline
-            )
-            
-            # Wait for transaction confirmation
-            txn_result = await self.rest_client.wait_for_transaction(txn_hash)
-            
-            # Extract gas information
-            gas_used = int(txn_result.get("gas_used", 0))
-            gas_unit_price = int(txn_result.get("gas_unit_price", 0))
-            gas_fee = gas_used * gas_unit_price
-            
-            print(f"✅ HTLC created successfully!")
-            print(f"   Transaction: {txn_hash}")
-            print(f"   Gas used: {gas_used}")
-            print(f"   Gas fee: {gas_fee} octas")
-            
-            return {
-                "success": True,
-                "transaction_hash": txn_hash,
-                "gas_used": gas_used,
-                "gas_fee": gas_fee,
-                "htlc_created": {
-                    "secret_hash": f"0x{secret_hash}",
-                    "user_address": user_address,
-                    "resolver_address": str(self.resolver.address()),
-                    "amount": amount,
-                    "deadline": deadline
-                }
+        # Convert hex string to bytes
+        if secret_hash.startswith("0x"):
+            secret_hash = secret_hash[2:]
+        secret_hash_bytes = bytes.fromhex(secret_hash)
+        
+        user_addr = AccountAddress.from_str(user_address)
+        
+        print(f"🔒 Creating HTLC:")
+        print(f"   Secret hash: 0x{secret_hash}")
+        print(f"   User address: {user_address}")
+        print(f"   Amount: {amount} octas")
+        print(f"   Deadline: {deadline}")
+        
+        # Submit transaction
+        txn_hash = await self.rest_client.create_htlc(
+            self.contract_address,
+            self.resolver,
+            secret_hash_bytes,
+            user_addr,
+            amount,
+            deadline
+        )
+        
+        # Wait for transaction confirmation
+        print("   Transaction:", txn_hash)
+        await self.rest_client.wait_for_transaction(txn_hash)
+        txn_result = await self.rest_client.transaction_by_hash(txn_hash)
+        print("Txn result", txn_result)
+        
+        # Extract gas information
+        gas_used = int(txn_result.get("gas_used", 0))
+        gas_unit_price = int(txn_result.get("gas_unit_price", 0))
+        gas_fee = gas_used * gas_unit_price
+        
+        print(f"✅ HTLC created successfully!")
+        print(f"   Gas used: {gas_used}")
+        print(f"   Gas fee: {gas_fee} octas")
+        
+        return {
+            "success": True,
+            "transaction_hash": txn_hash,
+            "gas_used": gas_used,
+            "gas_fee": gas_fee,
+            "htlc_created": {
+                "secret_hash": f"0x{secret_hash}",
+                "user_address": user_address,
+                "resolver_address": str(self.resolver.address()),
+                "amount": amount,
+                "deadline": deadline
             }
-            
-        except Exception as e:
-            print(f"❌ Error creating HTLC: {str(e)}")
-            return {
-                "success": False,
-                "error": str(e),
-                "transaction_hash": None
-            }
+        }
     
     async def close(self):
         """Clean up resources."""
@@ -331,12 +326,12 @@ def create_account(args: argparse.Namespace) -> Account:
         raise ValueError("No account method specified. Use --private-key, --private-key-env, --use-faucet, or --random-key")
 
 
-def create_flask_app(daemon: FillDaemon) -> Flask:
+def create_flask_app(daemon: FillDaemon) -> Quart:
     """Create and configure the Flask application."""
-    app = Flask(__name__)
+    app = Quart(__name__)
     
-    @app.route('/aptos/<network>/<order_id>', methods=['POST'])
-    def create_htlc_endpoint(network: str, order_id: str):
+    @app.route('/aptos/<network>/fill', methods=['POST'])
+    async def create_htlc_endpoint(network: str):
         """Endpoint to create an HTLC."""
         
         # Validate network matches daemon configuration
@@ -347,53 +342,35 @@ def create_flask_app(daemon: FillDaemon) -> Flask:
             }), 400
         
         # Parse request JSON
-        try:
-            data = request.get_json()
-            if not data:
-                raise ValueError("No JSON data provided")
-            
-            secret_hash = data.get("secret_hash")
-            user_address = data.get("user_address") 
-            amount = data.get("amount")
-            deadline = data.get("deadline")
-            
-            # Validate required fields
-            if not all([secret_hash, user_address, amount, deadline]):
-                raise ValueError("Missing required fields: secret_hash, user_address, amount, deadline")
-            
-            # Validate types
-            if not isinstance(amount, int) or amount <= 0:
-                raise ValueError("Amount must be a positive integer")
-            
-            if not isinstance(deadline, int) or deadline <= 0:
-                raise ValueError("Deadline must be a positive integer (unix timestamp)")
-                
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid request: {str(e)}"
-            }), 400
+        data = await request.get_json()
+        if not data:
+            raise ValueError("No JSON data provided")
+        
+        secret_hash = data.get("secret_hash")
+        user_address = data.get("user_address") 
+        amount = data.get("amount")
+        deadline = data.get("deadline")
+        
+        # Validate required fields
+        if not all([secret_hash, user_address, amount, deadline]):
+            raise ValueError("Missing required fields: secret_hash, user_address, amount, deadline")
+        
+        # Validate types
+        if not isinstance(amount, int) or amount <= 0:
+            raise ValueError("Amount must be a positive integer")
+        
+        if not isinstance(deadline, int) or deadline <= 0:
+            raise ValueError("Deadline must be a positive integer (unix timestamp)")
+
         
         # Create HTLC asynchronously
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(
-                daemon.create_htlc_transaction(secret_hash, user_address, amount, deadline)
-            )
-            loop.close()
-            
-            status_code = 200 if result["success"] else 500
-            return jsonify(result), status_code
-            
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Internal error: {str(e)}"
-            }), 500
+        result = await daemon.create_htlc_transaction(secret_hash, user_address, amount, deadline)
+        
+        status_code = 200 if result["success"] else 500
+        return jsonify(result), status_code
     
-    @app.route('/aptos/<network>', methods=['GET'])
-    def health_check_endpoint(network: str):
+    @app.route('/aptos/<network>/health.fill', methods=['GET'])
+    async def health_check_endpoint(network: str):
         """Health check endpoint."""
         
         # Validate network matches daemon configuration
@@ -405,10 +382,7 @@ def create_flask_app(daemon: FillDaemon) -> Flask:
         
         # Perform async health check
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            health_result = loop.run_until_complete(daemon.health_check())
-            loop.close()
+            health_result = await daemon.health_check()
             
             status_code = 200 if health_result["status"] == "healthy" else 503
             return jsonify(health_result), status_code
@@ -438,12 +412,13 @@ async def main():
     parser.add_argument("--indexer-url", help="Indexer URL")
     parser.add_argument("--chain-id", type=int, help="Chain ID")
     
+    parser.add_argument("--use-faucet", action="store_true",
+                        help="Generate random account and fund from faucet")
+
     # Account configuration (mutually exclusive)
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument("--private-key", help="Private key in hex format")
-    account_group.add_argument("--private-key-env", help="Environment variable containing private key")
-    account_group.add_argument("--use-faucet", action="store_true",
-                             help="Generate random account and fund from faucet")
+    account_group.add_argument("--private-key-env", help="Environment variable containing private key")    
     account_group.add_argument("--random-key", action="store_true",
                              help="Generate random account (no faucet funding)")
     
@@ -495,15 +470,11 @@ async def main():
         app = create_flask_app(daemon)
         
         print(f"🚀 Starting HTLC Fill Daemon on {args.host}:{args.port}")
-        print(f"   Endpoint: POST /aptos/{config['network']}/<order_id>")
-        print(f"   Health check: GET /aptos/{config['network']}")
+        print(f"   Endpoint: POST /aptos/{config['network']}/fill")
+        print(f"   Health check: GET /aptos/{config['network']}/health.fill")
         
         # Run Flask app
-        app.run(host=args.host, port=args.port, debug=False)
-        
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        sys.exit(1)
+        await app.run_task(host=args.host, port=args.port, debug=True)
     finally:
         # Clean up
         if 'daemon' in locals():

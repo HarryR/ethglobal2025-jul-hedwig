@@ -15,7 +15,7 @@ import time
 import hashlib
 from typing import Any, Dict, Optional
 
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 from aptos_sdk.account import Account
 from aptos_sdk.account_address import AccountAddress
 from aptos_sdk.async_client import FaucetClient, RestClient
@@ -209,9 +209,10 @@ class HelperDaemon:
     async def initialize(self, fund_amount: int = 10_000_000):
         """Initialize the daemon by funding the account if needed."""
         if self.use_faucet and self.faucet_client:
-            print(f"💰 Funding claimer account with {fund_amount} octas...")
-            await self.faucet_client.fund_account(self.claimer.address(), fund_amount)
-            
+            balance = await self.rest_client.account_balance(self.claimer.address())
+            if balance < fund_amount:
+                print(f"💰 Funding claimer account with {fund_amount} octas...")
+                await self.faucet_client.fund_account(self.claimer.address(), fund_amount)            
             # Check balance
             balance = await self.rest_client.account_balance(self.claimer.address())
             print(f"✅ Claimer balance: {balance} octas")
@@ -272,33 +273,16 @@ class HelperDaemon:
     
     async def reveal_secret_transaction(
         self,
-        secret: str,
-        secret_hash: Optional[str] = None
+        secret_bytes: bytes
     ) -> Dict[str, Any]:
         """Reveal secret to claim HTLC funds."""
         try:
-            # Convert secret to bytes
-            if isinstance(secret, str):
-                secret_bytes = secret.encode('utf-8')
-            else:
-                secret_bytes = secret
-            
             # Calculate hash for verification
             calculated_hash = hashlib.sha3_256(secret_bytes).digest()
             calculated_hash_hex = calculated_hash.hex()
             
-            # Verify hash if provided
-            if secret_hash:
-                if secret_hash.startswith("0x"):
-                    secret_hash = secret_hash[2:]
-                if calculated_hash_hex != secret_hash:
-                    return {
-                        "success": False,
-                        "error": f"Secret hash mismatch. Expected {secret_hash}, calculated {calculated_hash_hex}"
-                    }
-            
             print(f"🔓 Revealing secret:")
-            print(f"   Secret: {secret}")
+            print(f"   Secret: {secret_bytes.hex()}")
             print(f"   Secret hash: {calculated_hash_hex}")
             
             # Get HTLC info first
@@ -342,7 +326,7 @@ class HelperDaemon:
                 "gas_fee": gas_fee,
                 "revealed": {
                     "secret_hash": f"0x{calculated_hash_hex}",
-                    "secret": secret,
+                    "secret": f"0x{secret_bytes.hex()}",
                     "user_address": htlc_info["user_address"],
                     "amount": htlc_info["amount"]
                 }
@@ -471,12 +455,12 @@ def create_account(args: argparse.Namespace) -> Account:
         raise ValueError("No account method specified. Use --private-key, --private-key-env, --use-faucet, or --random-key")
 
 
-def create_flask_app(daemon: HelperDaemon) -> Flask:
+def create_flask_app(daemon: HelperDaemon) -> Quart:
     """Create and configure the Flask application."""
-    app = Flask(__name__)
+    app = Quart(__name__)
     
     @app.route('/aptos/<network>/reveal', methods=['POST'])
-    def reveal_secret_endpoint(network: str):
+    async def reveal_secret_endpoint(network: str):
         """Endpoint to reveal a secret and claim HTLC funds."""
         
         # Validate network matches daemon configuration
@@ -492,12 +476,16 @@ def create_flask_app(daemon: HelperDaemon) -> Flask:
             if not data:
                 raise ValueError("No JSON data provided")
             
-            secret = data.get("secret")
-            secret_hash = data.get("secret_hash")  # optional
+            secret_str:str = data["secret"]
+            if not secret_str:
+                raise ValueError("Missing required field: secret")
+            
+            if secret_str.startswith('0x'):
+                secret_str = secret_str[2:]
+            secret_bytes = bytes.fromhex(secret_str)
             
             # Validate required fields
-            if not secret:
-                raise ValueError("Missing required field: secret")
+            
                 
         except Exception as e:
             return jsonify({
@@ -506,25 +494,12 @@ def create_flask_app(daemon: HelperDaemon) -> Flask:
             }), 400
         
         # Reveal secret asynchronously
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(
-                daemon.reveal_secret_transaction(secret, secret_hash)
-            )
-            loop.close()
-            
-            status_code = 200 if result["success"] else 400
-            return jsonify(result), status_code
-            
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Internal error: {str(e)}"
-            }), 500
+        result = await daemon.reveal_secret_transaction(secret_bytes)
+        status_code = 200 if result["success"] else 400
+        return jsonify(result), status_code
     
     @app.route('/aptos/<network>/refund', methods=['POST'])
-    def claim_refund_endpoint(network: str):
+    async def claim_refund_endpoint(network: str):
         """Endpoint to claim refund after HTLC timeout."""
         
         # Validate network matches daemon configuration
@@ -535,43 +510,23 @@ def create_flask_app(daemon: HelperDaemon) -> Flask:
             }), 400
         
         # Parse request JSON
-        try:
-            data = request.get_json()
-            if not data:
-                raise ValueError("No JSON data provided")
-            
-            secret_hash = data.get("secret_hash")
-            
-            # Validate required fields
-            if not secret_hash:
-                raise ValueError("Missing required field: secret_hash")
-                
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid request: {str(e)}"
-            }), 400
+        data = request.get_json()
+        if not data:
+            raise ValueError("No JSON data provided")
+        
+        secret_hash = data.get("secret_hash")
+        
+        # Validate required fields
+        if not secret_hash:
+            raise ValueError("Missing required field: secret_hash")
         
         # Claim refund asynchronously
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(
-                daemon.claim_refund_transaction(secret_hash)
-            )
-            loop.close()
-            
-            status_code = 200 if result["success"] else 400
-            return jsonify(result), status_code
-            
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Internal error: {str(e)}"
-            }), 500
+        result = await daemon.claim_refund_transaction(secret_hash)
+        status_code = 200 if result["success"] else 400
+        return jsonify(result), status_code
     
     @app.route('/aptos/<network>/health.helper', methods=['GET'])
-    def health_check_endpoint(network: str):
+    async def health_check_endpoint(network: str):
         """Health check endpoint for helper daemon."""
         
         # Validate network matches daemon configuration  
@@ -582,21 +537,10 @@ def create_flask_app(daemon: HelperDaemon) -> Flask:
             }), 400
         
         # Perform async health check
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            health_result = loop.run_until_complete(daemon.health_check())
-            loop.close()
-            
-            status_code = 200 if health_result["status"] == "healthy" else 503
-            return jsonify(health_result), status_code
-            
-        except Exception as e:
-            return jsonify({
-                "status": "unhealthy",
-                "error": f"Health check failed: {str(e)}"
-            }), 503
-    
+        health_result = await daemon.health_check()
+        status_code = 200 if health_result["status"] == "healthy" else 503
+        return jsonify(health_result), status_code
+                
     return app
 
 
@@ -615,13 +559,13 @@ async def main():
     parser.add_argument("--faucet-url", help="Faucet URL")
     parser.add_argument("--indexer-url", help="Indexer URL")
     parser.add_argument("--chain-id", type=int, help="Chain ID")
+    parser.add_argument("--use-faucet", action="store_true",
+                        help="Generate random account and fund from faucet")
     
     # Account configuration (mutually exclusive)
     account_group = parser.add_mutually_exclusive_group()
     account_group.add_argument("--private-key", help="Private key in hex format")
-    account_group.add_argument("--private-key-env", help="Environment variable containing private key")
-    account_group.add_argument("--use-faucet", action="store_true",
-                             help="Generate random account and fund from faucet")
+    account_group.add_argument("--private-key-env", help="Environment variable containing private key")    
     account_group.add_argument("--random-key", action="store_true",
                              help="Generate random account (no faucet funding)")
     
@@ -678,7 +622,7 @@ async def main():
     print(f"     GET /aptos/{config['network']}/health.helper")
     
     # Run Flask app
-    app.run(host=args.host, port=args.port, debug=False)
+    await app.run_task(host=args.host, port=args.port, debug=False)
 
     # Clean up
     if 'daemon' in locals():

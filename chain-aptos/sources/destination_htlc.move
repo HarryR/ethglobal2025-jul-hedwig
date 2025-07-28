@@ -12,6 +12,7 @@ module htlc::destination_htlc {
     const E_HTLC_NOT_FOUND: u64 = 1;
     const E_NOT_EXPIRED: u64 = 3;
     const E_ALREADY_CLAIMED: u64 = 4;
+    const E_DUPLICATE_HTLC: u64 = 5;
 
     /// Stores the resource account's signer capability
     /// This is stored at the module deployer's address, not the resource account
@@ -63,7 +64,7 @@ module htlc::destination_htlc {
         // Create a resource account with a deterministic seed
         let (resource_signer, signer_cap) = account::create_resource_account(
             deployer, 
-            b"htlc_registry_v1"  // Fixed seed ensures deterministic address
+            b"htlc::destination_htlc"  // Fixed seed ensures deterministic address
         );
         
         // Initialize the registry on the resource account
@@ -109,7 +110,7 @@ module htlc::destination_htlc {
         let registry = borrow_global_mut<HTLCRegistry>(resource_addr);
         
         // Ensure HTLC doesn't already exist for this secret_hash
-        assert!(!table::contains(&registry.htlcs, secret_hash), E_ALREADY_CLAIMED);
+        assert!(!table::contains(&registry.htlcs, secret_hash), E_DUPLICATE_HTLC);
         
         // Withdraw funds from resolver
         let locked_funds = coin::withdraw<AptosCoin>(resolver, amount);

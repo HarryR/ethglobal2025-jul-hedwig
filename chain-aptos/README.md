@@ -19,11 +19,11 @@ make localnet
 This will magically deploy stuff onto devnet, including using faucet. It uses `deploy.py` which can also deploy to localnet, testnet & mainnet.
 
 ```bash
-make deploy-devnet
+make devnet-deploy
 ```
 
 All deployed contracts are immutable, no 'admin' backdoor BS.
-Storage is using the Resource account pattern.
+Storage & funds are managed using the Resource account pattern, meaning deployer has no access to anything.
 
 ## Mobile Wallet
 

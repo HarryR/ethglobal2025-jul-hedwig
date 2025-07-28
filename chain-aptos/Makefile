@@ -4,12 +4,13 @@ APTOS_CLI_ARCH?=Linux-x86_64
 APTOS_CLI_ZIP=aptos-cli-$(APTOS_CLI_VERSION)-$(APTOS_CLI_ARCH).zip
 APTOS_CLI_URL=https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v$(APTOS_CLI_VERSION)/$(APTOS_CLI_ZIP)
 APTOS?=./aptos
+PYTHON?=python3
 
 all: compile test
 
 # See: https://github.com/aptos-labs/aptos-python-sdk
 python-deps:
-	pip3 install --user --break-system-packages -r requirements.txt
+	$(PYTHON) -mpip install --user --break-system-packages -r requirements.txt
 
 test: aptos
 	$(APTOS) move test --package-dir contracts
@@ -17,8 +18,11 @@ test: aptos
 build compile: aptos
 	$(APTOS) move compile --save-metadata --package-dir contracts --dev
 
-deploy-devnet:
+devnet-deploy:
 	APTOS_CLI_PATH=$(APTOS) python3 deploy.py --network devnet --use-faucet --force-build
+
+devnet-filldaemon:
+	$(PYTHON) fill_daemon.py --params-file devnet.json --use-faucet --random-key
 
 # See: https://aptos.dev/network/nodes/localnet
 localnet:

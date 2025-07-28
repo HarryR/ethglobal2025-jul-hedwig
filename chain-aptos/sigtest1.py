@@ -3,10 +3,10 @@
 Python script to create and sign HTLC Order structures matching the Move contract
 """
 
-import time
-import secrets
+from os import urandom
 import hashlib
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
+from aptos_sdk.account_address import AccountAddress
 from aptos_sdk.account import Account
 from aptos_sdk.bcs import Serializer
 from aptos_sdk.account_address import AccountAddress
@@ -16,37 +16,34 @@ class HTLCOrder:
     HTLC Order structure matching the Move contract exactly
     """
     def __init__(self,
-                 user_address: AccountAddress,
-                 resolver_address: AccountAddress, 
                  user_public_key: bytes,
                  resolver_public_key: bytes,
                  user_amount: int,
                  resolver_amount: int,
                  venue_address: AccountAddress,
                  venue_fee: int,
-                 arbitrator_address: AccountAddress,
                  arbitrator_public_key: bytes,  # THIS WAS MISSING!
                  arbitrator_attention_fee: int,
                  arbitrator_usage_fee: int,
                  secret_hash: bytes,
                  submission_deadline: int,
-                 resolver_action_deadline: int):
-        
-        self.user_address = user_address
-        self.resolver_address = resolver_address
+                 resolver_action_deadline: int,
+                 destination_chain: bytes,
+                 destination_address: bytes):
         self.user_public_key = user_public_key
         self.resolver_public_key = resolver_public_key
         self.user_amount = user_amount
         self.resolver_amount = resolver_amount
         self.venue_address = venue_address
         self.venue_fee = venue_fee
-        self.arbitrator_address = arbitrator_address
         self.arbitrator_public_key = arbitrator_public_key  # Added this field
         self.arbitrator_attention_fee = arbitrator_attention_fee
         self.arbitrator_usage_fee = arbitrator_usage_fee
         self.secret_hash = secret_hash
         self.submission_deadline = submission_deadline
         self.resolver_action_deadline = resolver_action_deadline
+        self.destination_chain = destination_chain
+        self.destination_address = destination_address
 
     def to_bcs(self) -> bytes:
         """
@@ -67,6 +64,8 @@ class HTLCOrder:
         serializer.to_bytes(self.secret_hash)                  # vector<u8>
         serializer.u64(self.submission_deadline)               # u64
         serializer.u64(self.resolver_action_deadline)          # u64
+        serializer.to_bytes(self.destination_chain)            # vector<u8>
+        serializer.to_bytes(self.destination_address)          # vector<u8>
         
         return serializer.output()
 
@@ -82,21 +81,20 @@ class HTLCOrder:
         Convert to dictionary for JSON serialization
         """
         return {
-            "user_address": str(self.user_address),
-            "resolver_address": str(self.resolver_address),
             "user_public_key": self.user_public_key.hex(),
             "resolver_public_key": self.resolver_public_key.hex(),
             "user_amount": self.user_amount,
             "resolver_amount": self.resolver_amount,
             "venue_address": str(self.venue_address),
             "venue_fee": self.venue_fee,
-            "arbitrator_address": str(self.arbitrator_address),
             "arbitrator_public_key": self.arbitrator_public_key.hex(),  # Added this
             "arbitrator_attention_fee": self.arbitrator_attention_fee,
             "arbitrator_usage_fee": self.arbitrator_usage_fee,
             "secret_hash": self.secret_hash.hex(),
             "submission_deadline": self.submission_deadline,
-            "resolver_action_deadline": self.resolver_action_deadline
+            "resolver_action_deadline": self.resolver_action_deadline,
+            "destination_chain": self.destination_chain.hex(),
+            "destination_address": self.destination_address.hex()
         }
 
 def create_test_order_and_sign() -> Dict[str, Any]:
@@ -112,27 +110,29 @@ def create_test_order_and_sign() -> Dict[str, Any]:
     # Create deterministic secret for testing
     secret = b"test_secret_for_htlc_verification_32"  # 32 bytes
     secret_hash = hashlib.sha3_256(secret).digest()
+
+    destination_chain = urandom(32)
+    destination_address = urandom(20)
     
     # Use fixed timestamp for testing
     current_time = 1700000000  # Fixed timestamp for reproducible tests
     
     # Create the order
     order = HTLCOrder(
-        user_address=user_account.address(),
-        resolver_address=resolver_account.address(),
         user_public_key=bytes(user_account.public_key().to_crypto_bytes()),
         resolver_public_key=bytes(resolver_account.public_key().to_crypto_bytes()),
         user_amount=1000000,  # 1M
         resolver_amount=2000000,  # 2M
         venue_address=venue_account.address(),
         venue_fee=50,
-        arbitrator_address=arbitrator_account.address(),
         arbitrator_public_key=bytes(arbitrator_account.public_key().to_crypto_bytes()),  # Fixed this
         arbitrator_attention_fee=25,
         arbitrator_usage_fee=100,
         secret_hash=secret_hash,
         submission_deadline=current_time + 3600,
-        resolver_action_deadline=current_time + 7200
+        resolver_action_deadline=current_time + 7200,
+        destination_chain=destination_chain,
+        destination_address=destination_address,
     )
     
     # Get BCS-encoded order for signing
@@ -165,13 +165,17 @@ def create_test_order_and_sign() -> Dict[str, Any]:
             "user_private_key": str(user_account.private_key),
             "resolver_private_key": str(resolver_account.private_key),
             "arbitrator_private_key": str(arbitrator_account.private_key),
-            "venue_private_key": str(venue_account.private_key)
+            "venue_private_key": str(venue_account.private_key),            
         },
         "public_keys": {
+            "user_address": user_account.auth_key(),            
             "user_public_key": str(user_account.public_key()),
             "resolver_public_key": str(resolver_account.public_key()),
+            "resolver_address": resolver_account.auth_key(),
             "arbitrator_public_key": str(arbitrator_account.public_key()),
-            "venue_public_key": str(venue_account.public_key())
+            "arbitrator_address": arbitrator_account.auth_key(),
+            "venue_public_key": str(venue_account.public_key()),
+            "venue_address": venue_account.auth_key(),
         }
     }
 
@@ -182,8 +186,6 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
     order_bcs = order_data["order_bcs"]
     user_sig = order_data["signatures"]["user_signature"][2:]  # Remove 0x
     resolver_sig = order_data["signatures"]["resolver_signature"][2:]
-    arbitrator_sig = order_data["signatures"]["arbitrator_signature"][2:]
-    arbitrator_pubkey = order_data["public_keys"]["arbitrator_public_key"][2:]
     
     # Convert hex strings to Move vector format
     def hex_to_move_vector(hex_str: str) -> str:
@@ -198,31 +200,27 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
     fun test_verify_order_signatures_success(aptos_framework: &signer) {{
         // Initialize timestamp for testing
         aptos_framework::timestamp::set_time_has_started_for_testing(aptos_framework);
-        // Test order BCS data
         let order_bcs = {hex_to_move_vector(order_bcs)};
         
         // Signatures
         let user_signature = {hex_to_move_vector(user_sig)};
         let resolver_signature = {hex_to_move_vector(resolver_sig)};
-        let arbitrator_signature = {hex_to_move_vector(arbitrator_sig)};
-        let arbitrator_public_key = {hex_to_move_vector(arbitrator_pubkey)};
         
         // Expected addresses
-        let expected_user_address = @0x{order_data['order']['user_address'][2:]};
-        let expected_resolver_address = @0x{order_data['order']['resolver_address'][2:]};
-        let expected_arbitrator_address = @0x{order_data['order']['arbitrator_address'][2:]};
-        
-        // Create test signer (using aptos_framework signer for simplicity)
-        
+        let expected_user_address = @0x{order_data['public_keys']['user_address'][2:]};
+        let expected_resolver_address = @0x{order_data['public_keys']['resolver_address'][2:]};
+        let expected_arbitrator_address = @0x{order_data['public_keys']['arbitrator_address'][2:]};
+    
         // This should succeed
-        verify_order_signatures(
-            aptos_framework,
+        let (_, verified) = verify_order_internal(
             order_bcs,
             user_signature,
-            resolver_signature,
-            arbitrator_signature,
-            arbitrator_public_key
+            resolver_signature
         );
+
+        assert!(verified.user_address == expected_user_address);
+        assert!(verified.resolver_address == expected_resolver_address);
+        assert!(verified.arbitrator_address == expected_arbitrator_address);
     }}
     
     // Test data breakdown:
@@ -254,9 +252,9 @@ def main():
     print(move_test_code)
     
     # Save everything
-    import json
-    with open("htlc_test_data.json", "w") as f:
-        json.dump(order_data, f, indent=2)
+    #import json
+    #with open("htlc_test_data.json", "w") as f:
+    #    json.dump(order_data, f, indent=2)
 
 if __name__ == "__main__":
     main()

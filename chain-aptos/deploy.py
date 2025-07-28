@@ -14,11 +14,10 @@ import asyncio
 import os
 import sys
 import glob
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from aptos_sdk.account import Account
 from aptos_sdk.account_address import AccountAddress
-from aptos_sdk.aptos_cli_wrapper import AptosCLIWrapper
 from aptos_sdk.async_client import FaucetClient, RestClient
 from aptos_sdk.package_publisher import PackagePublisher
 

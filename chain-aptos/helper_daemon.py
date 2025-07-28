@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 HTLC Helper Daemon - API service for revealing secrets and claiming refunds.
 
@@ -205,18 +206,27 @@ class HelperDaemon:
                 self.rest_client,
                 os.getenv("FAUCET_AUTH_TOKEN")
             )
-    
+
     async def initialize(self, fund_amount: int = 10_000_000):
         """Initialize the daemon by funding the account if needed."""
         if self.use_faucet and self.faucet_client:
             balance = await self.rest_client.account_balance(self.claimer.address())
             if balance < fund_amount:
+                print("Existing balance", balance)
                 print(f"💰 Funding claimer account with {fund_amount} octas...")
                 await self.faucet_client.fund_account(self.claimer.address(), fund_amount)            
             # Check balance
             balance = await self.rest_client.account_balance(self.claimer.address())
             print(f"✅ Claimer balance: {balance} octas")
     
+    async def get_balance(self, address:str) -> int:
+        account_addr = AccountAddress.from_str(address)
+        return await self.rest_client.account_balance(account_addr)
+    
+    async def txwait(self, transaction_id:str) -> dict:
+        await self.rest_client.wait_for_transaction(transaction_id)
+        return await self.rest_client.transaction_by_hash(transaction_id)
+
     async def health_check(self) -> Dict[str, Any]:
         """Perform a comprehensive health check including contract verification."""
         #try:
@@ -257,88 +267,68 @@ class HelperDaemon:
                 "claimer_address": str(self.claimer.address()),
                 "contract_address": str(self.contract_address)
             }
-        """
-        except Exception as e:
-            print(f"❌ Contract health check failed: {e}")
-            return {
-                "status": "unhealthy",
-                "contract_responsive": False,
-                "hash_verification": "error",
-                "error": str(e),
-                "network": self.network,
-                "claimer_address": str(self.claimer.address()),
-                "contract_address": str(self.contract_address)
-            }
-        """
     
     async def reveal_secret_transaction(
         self,
         secret_bytes: bytes
     ) -> Dict[str, Any]:
         """Reveal secret to claim HTLC funds."""
-        try:
-            # Calculate hash for verification
-            calculated_hash = hashlib.sha3_256(secret_bytes).digest()
-            calculated_hash_hex = calculated_hash.hex()
-            
-            print(f"🔓 Revealing secret:")
-            print(f"   Secret: {secret_bytes.hex()}")
-            print(f"   Secret hash: {calculated_hash_hex}")
-            
-            # Get HTLC info first
-            htlc_info = await self.rest_client.get_htlc_info(self.contract_address, calculated_hash)
-            if not htlc_info:
-                return {
-                    "success": False,
-                    "error": f"HTLC not found for secret hash {calculated_hash_hex}"
-                }
-            
-            if htlc_info["claimed"]:
-                return {
-                    "success": False,
-                    "error": "HTLC already claimed"
-                }
-            
-            # Submit reveal transaction
-            txn_hash = await self.rest_client.reveal_secret(
-                self.contract_address,
-                self.claimer,
-                secret_bytes
-            )
-            
-            # Wait for transaction confirmation
-            txn_result = await self.rest_client.wait_for_transaction(txn_hash)
-            
-            # Extract gas information
-            gas_used = int(txn_result.get("gas_used", 0))
-            gas_unit_price = int(txn_result.get("gas_unit_price", 0))
-            gas_fee = gas_used * gas_unit_price
-            
-            print(f"✅ Secret revealed successfully!")
-            print(f"   Transaction: {txn_hash}")
-            print(f"   Gas used: {gas_used}")
-            print(f"   Gas fee: {gas_fee} octas")
-            
-            return {
-                "success": True,
-                "transaction_hash": txn_hash,
-                "gas_used": gas_used,
-                "gas_fee": gas_fee,
-                "revealed": {
-                    "secret_hash": f"0x{calculated_hash_hex}",
-                    "secret": f"0x{secret_bytes.hex()}",
-                    "user_address": htlc_info["user_address"],
-                    "amount": htlc_info["amount"]
-                }
-            }
-            
-        except Exception as e:
-            print(f"❌ Error revealing secret: {str(e)}")
+        # Calculate hash for verification
+        calculated_hash = hashlib.sha3_256(secret_bytes).digest()
+        calculated_hash_hex = calculated_hash.hex()
+        
+        print(f"🔓 Revealing secret:")
+        print(f"   Secret: {secret_bytes.hex()}")
+        print(f"   Secret hash: {calculated_hash_hex}")
+        
+        # Get HTLC info first
+        htlc_info = await self.rest_client.get_htlc_info(self.contract_address, calculated_hash)
+        if not htlc_info:
             return {
                 "success": False,
-                "error": str(e),
-                "transaction_hash": None
+                "error": f"HTLC not found for secret hash {calculated_hash_hex}"
             }
+        
+        if htlc_info["claimed"]:
+            return {
+                "success": False,
+                "error": "HTLC already claimed"
+            }
+        
+        # Submit reveal transaction
+        txn_hash = await self.rest_client.reveal_secret(
+            self.contract_address,
+            self.claimer,
+            secret_bytes
+        )
+        
+        # Wait for transaction confirmation
+        await self.rest_client.wait_for_transaction(txn_hash)
+        txn_result = await self.rest_client.transaction_by_hash(txn_hash)
+        
+        # Extract gas information
+        gas_used = int(txn_result.get("gas_used", 0))
+        gas_unit_price = int(txn_result.get("gas_unit_price", 0))
+        gas_fee = gas_used * gas_unit_price
+        
+        print(f"✅ Secret revealed successfully!")
+        print(f"   Transaction: {txn_hash}")
+        print(f"   Gas used: {gas_used}")
+        print(f"   Gas fee: {gas_fee} octas")
+        
+        return {
+            "success": True,
+            "transaction_hash": txn_hash,
+            "gas_used": gas_used,
+            "gas_fee": gas_fee,
+            "revealed": {
+                "secret_hash": f"0x{calculated_hash_hex}",
+                "secret": f"0x{secret_bytes.hex()}",
+                "user_address": htlc_info["user_address"],
+                "amount": htlc_info["amount"]
+            }
+        }
+
     
     async def claim_refund_transaction(
         self,
@@ -429,12 +419,6 @@ def create_account(args: argparse.Namespace) -> Account:
         print("Private Key", account.private_key.hex())
         return account
     
-    elif args.use_faucet:
-        print("🎲 Generating random account for faucet funding...")
-        account = Account.generate()
-        print("Private Key", account.private_key.hex())
-        return account
-    
     elif args.private_key:
         key = args.private_key
         if key.startswith("0x"):
@@ -452,12 +436,32 @@ def create_account(args: argparse.Namespace) -> Account:
         return Account.load_key(key)
     
     else:
-        raise ValueError("No account method specified. Use --private-key, --private-key-env, --use-faucet, or --random-key")
+        raise ValueError("No account method specified. Use --private-key, --private-key-env, or --random-key")
 
 
 def create_flask_app(daemon: HelperDaemon) -> Quart:
     """Create and configure the Flask application."""
     app = Quart(__name__)
+
+    @app.route('/aptos/<network>/balance/<account>', methods=['GET'])
+    async def get_balance(network:str, account:str):
+        if network != daemon.network:
+            return jsonify({
+                "success": False,
+                "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
+            }), 400
+        balance = await daemon.get_balance(account)
+        return jsonify({'balance': balance})
+    
+    @app.route('/aptos/<network>/txwait/<transaction_id>', methods=['GET'])
+    async def txwait(network:str, transaction_id:str):
+        if network != daemon.network:
+            return jsonify({
+                "success": False,
+                "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
+            }), 400
+        result = await daemon.txwait(transaction_id)
+        return jsonify(result)
     
     @app.route('/aptos/<network>/reveal', methods=['POST'])
     async def reveal_secret_endpoint(network: str):
@@ -471,27 +475,17 @@ def create_flask_app(daemon: HelperDaemon) -> Quart:
             }), 400
         
         # Parse request JSON
-        try:
-            data = request.get_json()
-            if not data:
-                raise ValueError("No JSON data provided")
-            
-            secret_str:str = data["secret"]
-            if not secret_str:
-                raise ValueError("Missing required field: secret")
-            
-            if secret_str.startswith('0x'):
-                secret_str = secret_str[2:]
-            secret_bytes = bytes.fromhex(secret_str)
-            
-            # Validate required fields
-            
-                
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid request: {str(e)}"
-            }), 400
+        data = await request.get_json()
+        if not data:
+            raise ValueError("No JSON data provided")
+        
+        secret_str:str = data["secret"]
+        if not secret_str:
+            raise ValueError("Missing required field: secret")
+        
+        if secret_str.startswith('0x'):
+            secret_str = secret_str[2:]
+        secret_bytes = bytes.fromhex(secret_str)            
         
         # Reveal secret asynchronously
         result = await daemon.reveal_secret_transaction(secret_bytes)
@@ -510,7 +504,7 @@ def create_flask_app(daemon: HelperDaemon) -> Quart:
             }), 400
         
         # Parse request JSON
-        data = request.get_json()
+        data = await request.get_json()
         if not data:
             raise ValueError("No JSON data provided")
         

@@ -12,6 +12,13 @@ All development is done inside a Docker container, that bind mounts the current 
 make docker-build docker-shell
 ```
 
+## Aptos
+
+See the `chain-aptos` directory:
+
+ * Source & Destination HTLC
+ * Resolver daemons
+
 ## Coding Music
 
 Music makes the world go round ☺️🎶🪩🎆
@@ -23,3 +30,6 @@ Music makes the world go round ☺️🎶🪩🎆
  * https://www.youtube.com/watch?v=8gzOH83I1W0
  * https://www.youtube.com/watch?v=Pv6QAoxnopQ
  * https://www.youtube.com/watch?v=UI2nWJPk6pY
+ * https://www.youtube.com/watch?v=OICeFYUu0j0
+ * https://www.youtube.com/watch?v=Op4srH2uoWw
+ * https://www.youtube.com/watch?v=P0GpUQpMBZY

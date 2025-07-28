@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 module htlc::destination_htlc {
     use aptos_framework::coin::{Self, Coin};
     use aptos_framework::aptos_coin::AptosCoin;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 module htlc::source_htlc {
     use std::bcs;
     use std::signer;

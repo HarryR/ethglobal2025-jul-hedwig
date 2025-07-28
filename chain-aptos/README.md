@@ -46,6 +46,20 @@ Where `<network>` is e.g. `devnet` or `mainnet`.
 The helper daemon pays gas to perform the `claim` and `reveal` stages.
 It uses a different key from the resolver, but is an internal service used by the resolver infrastructure.
 
+### Balance
+
+* Checks an Aptos account balance
+
+`GET /aptos/<network>/balance/<account>`
+
+#### Response JSON:
+
+```json
+{
+    "balance": 1234
+}
+```
+
 ### Reveal
 
 `POST /aptos/<network>/reveal`

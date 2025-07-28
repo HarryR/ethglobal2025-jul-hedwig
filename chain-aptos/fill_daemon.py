@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 HTLC Fill Daemon - Internal service for creating HTLCs by depositing funds.
 
@@ -302,10 +303,6 @@ def create_account(args: argparse.Namespace) -> Account:
         print("🎲 Generating random account...")
         return Account.generate()
     
-    elif args.use_faucet:
-        print("🎲 Generating random account for faucet funding...")
-        return Account.generate()
-    
     elif args.private_key:
         key = args.private_key
         if key.startswith("0x"):
@@ -323,7 +320,7 @@ def create_account(args: argparse.Namespace) -> Account:
         return Account.load_key(key)
     
     else:
-        raise ValueError("No account method specified. Use --private-key, --private-key-env, --use-faucet, or --random-key")
+        raise ValueError("No account method specified. Use --private-key, --private-key-env, or --random-key")
 
 
 def create_flask_app(daemon: FillDaemon) -> Quart:

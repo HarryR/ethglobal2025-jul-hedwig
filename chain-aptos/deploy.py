@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
-Enhanced Aptos contract deployment script with network selection and account options.
+Aptos contract deployment script with network selection and account options.
 
 Usage examples:
     python deploy.py --network devnet --use-faucet

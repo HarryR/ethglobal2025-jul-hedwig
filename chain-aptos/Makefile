@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # See: https://aptos.dev/build/cli/install-cli/install-cli-linux
 APTOS_CLI_VERSION?=7.6.1
 APTOS_CLI_ARCH?=Linux-x86_64

@@ -14,9 +14,12 @@ make docker-build docker-shell
 
 ## Coding Music
 
+Music makes the world go round ☺️🎶🪩🎆
+
  * https://www.youtube.com/watch?v=VQ5Zeh8gs4U
  * https://www.youtube.com/watch?v=g1xoRFCSLNQ
  * https://soundcloud.com/swufm/dom-carlo-06-july-2025
  * https://soundcloud.com/minirigs/aloka-minirig-mix
  * https://www.youtube.com/watch?v=8gzOH83I1W0
  * https://www.youtube.com/watch?v=Pv6QAoxnopQ
+ * https://www.youtube.com/watch?v=UI2nWJPk6pY

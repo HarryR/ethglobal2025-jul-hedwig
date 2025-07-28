@@ -128,11 +128,11 @@ class HTLCClient(RestClient):
     async def hash_secret(self, contract_address: AccountAddress, secret: bytes) -> bytes:
         """Call the contract's hash_secret view function."""
         try:
-            result = await self.view(
+            result = json.loads(await self.view(
                 f"{contract_address}::destination_htlc::hash_secret",
                 [],
                 [secret.hex()]
-            )
+            ))
             # The result is returned as a list with hex string
             if result and len(result) > 0:
                 hash_hex = result[0]
@@ -448,7 +448,7 @@ async def main():
                              help="Generate random account (no faucet funding)")
     
     # Server configuration
-    parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
+    parser.add_argument("--port", type=int, default=7300, help="Port to run the server on")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
     parser.add_argument("--fund-amount", type=int, default=10_000_000,
                        help="Amount to fund account with when using faucet (in octas)")

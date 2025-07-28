@@ -22,7 +22,10 @@ devnet-deploy:
 	APTOS_CLI_PATH=$(APTOS) python3 deploy.py --network devnet --use-faucet --force-build
 
 devnet-filldaemon:
-	$(PYTHON) fill_daemon.py --params-file devnet.json --use-faucet --random-key
+	$(PYTHON) fill_daemon.py --params-file devnet.json --private-key 0xa692455191ed752fd4f55499c73de38a0fc921150221194cf0e779f0da823b42 # --use-faucet
+
+devnet-helper:
+	$(PYTHON) helper_daemon.py --params-file devnet.json --private-key 0xa692455191ed752fd4f55499c73de38a0fc921150221194cf0e779f0da823b42 # --use-faucet
 
 # See: https://aptos.dev/network/nodes/localnet
 localnet:

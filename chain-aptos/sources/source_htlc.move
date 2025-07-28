@@ -141,7 +141,6 @@ module htlc::source_htlc {
         signer::address_of(&resource_signer)
     }
     
-
     fun verify_order_internal(
         order_bcs: vector<u8>,
         user_signature: vector<u8>,
@@ -209,15 +208,19 @@ module htlc::source_htlc {
     }
 
     /// Resolver deposits balance to participate in swaps
-    public entry fun deposit_resolver_balance(resolver: &signer, amount: u64)
+    /// Anybody can topup anybody elses balance
+    public entry fun deposit_resolver_balance(
+        caller: &signer,
+        resolver_addr: address,
+        amount: u64
+    )
         acquires SignerCapability, PersistentState
     {
-        let resolver_addr = signer::address_of(resolver);
         let registry_addr = get_registry_address();
         let state = borrow_global_mut<PersistentState>(registry_addr);
         
         // Transfer coins to contract
-        coin::transfer<AptosCoin>(resolver, registry_addr, amount);
+        coin::transfer<AptosCoin>(caller, registry_addr, amount);
         
         // Update balance
         if (table::contains(&state.resolver_balances, resolver_addr)) {
@@ -229,7 +232,10 @@ module htlc::source_htlc {
     }
 
     /// Resolver withdraws available balance
-    public entry fun withdraw_resolver_balance(resolver: &signer, amount: u64)
+    public entry fun withdraw_resolver_balance(
+        resolver: &signer,
+        amount: u64
+    )
         acquires SignerCapability, PersistentState
     {
         let resolver_addr = signer::address_of(resolver);
@@ -530,6 +536,7 @@ module htlc::source_htlc {
         }
     }
 
+    // Run sigtest1.py to re-generate parameters
     #[test(aptos_framework = @aptos_framework)]
     fun test_verify_order_signatures_success(aptos_framework: &signer) {
         // Initialize timestamp for testing

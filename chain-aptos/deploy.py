@@ -14,6 +14,7 @@ import asyncio
 import os
 import sys
 import glob
+import json
 from typing import List, Dict, Any
 
 from aptos_sdk.account import Account
@@ -433,6 +434,17 @@ async def main():
         print(f"Node URL: {network_config['node_url']}")
         if network_config.get('indexer_url'):
             print(f"Indexer URL: {network_config['indexer_url']}")
+        
+        deploy_json_file = f"{args.network}.json"
+        with open(deploy_json_file, "w") as handle:
+            json.dump({
+                'network': args.network,
+                'contract_address': str(contract_address),
+                'node_url': network_config['node_url'],
+                'faucet_url': network_config['faucet_url'],
+                'indexer_url': network_config['indexer_url'],
+                'chain_id': network_config['chain_id']
+            }, handle)
         
     except KeyboardInterrupt:
         print("\n❌ Deployment cancelled by user")

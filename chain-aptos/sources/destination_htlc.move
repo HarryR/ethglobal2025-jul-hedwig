@@ -142,7 +142,7 @@ module htlc::destination_htlc {
         _caller: &signer,
         secret: vector<u8>
     ) acquires SignerCapability, HTLCRegistry {
-        let secret_hash = hash::sha3_256(secret);
+        let secret_hash = hash_secret(secret);
     
         let resource_addr = get_registry_address();
         let registry = borrow_global_mut<HTLCRegistry>(resource_addr);

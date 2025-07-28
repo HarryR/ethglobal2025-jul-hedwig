@@ -25,6 +25,15 @@ make devnet-deploy
 All deployed contracts are immutable, no 'admin' backdoor BS.
 Storage & funds are managed using the Resource account pattern, meaning deployer has no access to anything.
 
+## Running
+
+There are several components necessary:
+
+```bash
+make devnet-filldaemon &  # runs on port 7300
+make devnet-helper &      # runs on port 7301
+```
+
 ## Mobile Wallet
 
 Using Petra Wallet: https://petra.app/

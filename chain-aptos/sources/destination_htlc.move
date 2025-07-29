@@ -239,6 +239,6 @@ module htlc::destination_htlc {
 
     #[view]
     public fun hash_secret(secret: vector<u8>): vector<u8> {
-        hash::sha3_256(secret)
+        hash::sha2_256(secret)
     }
 }

@@ -258,12 +258,12 @@ module htlc::source_htlc {
 
     #[view]
     public fun hash_secret(secret: vector<u8>): vector<u8> {
-        std::hash::sha3_256(secret)
+        std::hash::sha2_256(secret)
     }
 
     #[view]
     public fun hash_order(order_bcs: vector<u8>): vector<u8> {
-        std::hash::sha3_256(order_bcs)
+        std::hash::sha2_256(order_bcs)
     }
 
     /// Create escrow with signed order

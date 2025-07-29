@@ -184,7 +184,7 @@ class FillDaemon:
         try:
             # Test secret for verification
             test_secret = b"test_secret_123"
-            expected_hash = hashlib.sha3_256(test_secret).digest()
+            expected_hash = hashlib.sha256(test_secret).digest()
             
             print("🔍 Performing contract health check...")
             print(f"   Testing with secret: {test_secret.hex()}")

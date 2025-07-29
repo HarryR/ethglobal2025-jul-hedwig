@@ -232,7 +232,7 @@ class HelperDaemon:
         #try:
         # Test secret for verification
         test_secret = b"test_secret_123"
-        expected_hash = hashlib.sha3_256(test_secret).digest()
+        expected_hash = hashlib.sha256(test_secret).digest()
         
         print("🔍 Performing contract health check...")
         print(f"   Testing with secret: {test_secret.hex()}")
@@ -274,7 +274,7 @@ class HelperDaemon:
     ) -> Dict[str, Any]:
         """Reveal secret to claim HTLC funds."""
         # Calculate hash for verification
-        calculated_hash = hashlib.sha3_256(secret_bytes).digest()
+        calculated_hash = hashlib.sha256(secret_bytes).digest()
         calculated_hash_hex = calculated_hash.hex()
         
         print(f"🔓 Revealing secret:")

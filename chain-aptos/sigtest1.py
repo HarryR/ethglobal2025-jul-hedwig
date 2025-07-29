@@ -72,10 +72,10 @@ class HTLCOrder:
 
     def hash(self) -> bytes:
         """
-        Create SHA3-256 hash of the BCS-encoded order
+        Create SHA2-256 hash of the BCS-encoded order
         """
         bcs_data = self.to_bcs()
-        return hashlib.sha3_256(bcs_data).digest()
+        return hashlib.sha256(bcs_data).digest()
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -110,7 +110,7 @@ def create_test_order_and_sign() -> Dict[str, Any]:
     
     # Create deterministic secret for testing
     secret = b"test_secret_for_htlc_verification_32"  # 32 bytes
-    secret_hash = hashlib.sha3_256(secret).digest()
+    secret_hash = hashlib.sha256(secret).digest()
 
     destination_chain = urandom(32)
     destination_address = urandom(20)

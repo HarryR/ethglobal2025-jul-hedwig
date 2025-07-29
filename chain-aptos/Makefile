@@ -7,6 +7,8 @@ APTOS_CLI_URL=https://github.com/aptos-labs/aptos-core/releases/download/aptos-c
 APTOS?=./aptos
 PYTHON?=python3
 
+.PHONY: build
+
 all: compile test
 
 # See: https://github.com/aptos-labs/aptos-python-sdk

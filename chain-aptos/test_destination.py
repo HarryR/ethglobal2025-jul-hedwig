@@ -2,7 +2,7 @@
 from os import urandom
 from random import randint
 from time import time
-from hashlib import sha3_256
+from hashlib import sha256
 import sys
 import requests
 
@@ -21,7 +21,7 @@ def main():
 
     secret = urandom(32)
     secret_hex = f"0x{secret.hex()}"
-    secret_hash = sha3_256(secret).digest()
+    secret_hash = sha256(secret).digest()
     secret_hash_hex = f"0x{secret_hash.hex()}"
     user_address = f"0x{urandom(32).hex()}"
     deadline = int(time() + 7200)

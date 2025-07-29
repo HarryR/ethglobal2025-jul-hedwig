@@ -32,6 +32,7 @@ There are several components necessary:
 ```bash
 make devnet-filldaemon &  # runs on port 7300
 make devnet-helper &      # runs on port 7301
+make devnet-arbitrator &  # runs on port 7302
 ```
 
 # Daemon APIs
@@ -39,12 +40,52 @@ make devnet-helper &      # runs on port 7301
 These daemon APIs are for internal use by the resolver only.
 For production deployment there must be authentication & session encryption etc. + firewalls.
 
+## Arbitrator API (port 7302)
+
+Where `<network>` is e.g. `devnet` or `mainnet`.
+
+The arbitrator daemon verifies HTLC deposits on-chain, and signs if the deposit exists
+
+### Arbitrate
+
+ * Signs the secret hash, in a format usable by Aptos contracts
+
+`POST /aptos/<network>/arbitrate.aptos`
+
+#### Input JSON:
+
+```python
+```
+
+#### Output JSON:
+
+```python
+```
+
 ## Helper API (port 7301)
 
 Where `<network>` is e.g. `devnet` or `mainnet`.
 
 The helper daemon pays gas to perform the `claim` and `reveal` stages.
 It uses a different key from the resolver, but is an internal service used by the resolver infrastructure.
+
+### Get Destination HTLC Info
+
+* Get destination HTLC info 
+
+`GET /aptos/<network>/destination_htlc/0x<secret_hash>`
+
+#### Response JSON:
+
+```python
+{
+    'amount': 7901,
+    'claimed': False,
+    'deadline': 1753796927,
+    'resolver_address': '0xa816d6...',
+    'user_address': '0xf225...'
+}
+```
 
 ### Balance
 
@@ -57,6 +98,25 @@ It uses a different key from the resolver, but is an internal service used by th
 ```json
 {
     "balance": 1234
+}
+```
+
+### Wait for Transaction
+
+`GET /aptos/<network>/wait/0x<txid>`
+
+Will wait until transaction has been mined, then returns the transaction data
+
+#### Response JSON
+```python
+{  
+    'accumulator_root_hash': '0x567...',
+    'changes': [
+        {
+            'address': ...
+        }
+    ],
+    ...
 }
 ```
 

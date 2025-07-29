@@ -5,6 +5,7 @@ Python script to create and sign HTLC Order structures matching the Move contrac
 """
 
 from os import urandom
+from random import randint
 import hashlib
 from typing import Dict, Any
 from aptos_sdk.account_address import AccountAddress
@@ -30,7 +31,9 @@ class HTLCOrder:
                  submission_deadline: int,
                  resolver_action_deadline: int,
                  destination_chain: bytes,
-                 destination_address: bytes):
+                 destination_address: bytes,
+                 destination_token: bytes,
+                 destination_amount: int):
         self.user_public_key = user_public_key
         self.resolver_public_key = resolver_public_key
         self.user_amount = user_amount
@@ -45,6 +48,8 @@ class HTLCOrder:
         self.resolver_action_deadline = resolver_action_deadline
         self.destination_chain = destination_chain
         self.destination_address = destination_address
+        self.destination_amount = destination_amount
+        self.destination_token = destination_token
 
     def to_bcs(self) -> bytes:
         """
@@ -67,6 +72,8 @@ class HTLCOrder:
         serializer.u64(self.resolver_action_deadline)          # u64
         serializer.to_bytes(self.destination_chain)            # vector<u8>
         serializer.to_bytes(self.destination_address)          # vector<u8>
+        serializer.to_bytes(self.destination_token)            # vector<u8>
+        serializer.u256(self.destination_amount)               # u256
         
         return serializer.output()
 
@@ -95,7 +102,9 @@ class HTLCOrder:
             "submission_deadline": self.submission_deadline,
             "resolver_action_deadline": self.resolver_action_deadline,
             "destination_chain": self.destination_chain.hex(),
-            "destination_address": self.destination_address.hex()
+            "destination_address": self.destination_address.hex(),
+            "destination_token": self.destination_token.hex(),
+            "destination_amount": self.destination_amount,
         }
 
 def create_test_order_and_sign() -> Dict[str, Any]:
@@ -114,6 +123,8 @@ def create_test_order_and_sign() -> Dict[str, Any]:
 
     destination_chain = urandom(32)
     destination_address = urandom(20)
+    destination_token = urandom(20)
+    destination_amount = randint(1000,1000)
     
     # Use fixed timestamp for testing
     current_time = 1700000000  # Fixed timestamp for reproducible tests
@@ -134,6 +145,8 @@ def create_test_order_and_sign() -> Dict[str, Any]:
         resolver_action_deadline=current_time + 7200,
         destination_chain=destination_chain,
         destination_address=destination_address,
+        destination_token=destination_token,
+        destination_amount=destination_amount,
     )
     
     # Get BCS-encoded order for signing
@@ -204,7 +217,7 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
         let order_bcs = {hex_to_move_vector(order_bcs)};
         
         // Signatures
-        let user_signature = {hex_to_move_vector(user_sig)};
+        //let user_signature = {hex_to_move_vector(user_sig)};
         let resolver_signature = {hex_to_move_vector(resolver_sig)};
         
         // Expected addresses
@@ -215,7 +228,7 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
         // This should succeed
         let (_, verified) = verify_order_internal(
             order_bcs,
-            user_signature,
+            //user_signature,
             resolver_signature
         );
 

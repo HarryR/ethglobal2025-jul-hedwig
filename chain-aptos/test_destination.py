@@ -43,6 +43,9 @@ def main():
     fill_tx = requests.get(f'{helper_url}/txwait/{fill_resp["transaction_hash"]}').json()
     print("Fill Tx", fill_tx)
 
+    info = requests.get(f'{helper_url}/destination_htlc/{secret_hash_hex}').json()
+    print('Info', info)
+
     reveal_obj = {
         'secret': secret_hex,
     }

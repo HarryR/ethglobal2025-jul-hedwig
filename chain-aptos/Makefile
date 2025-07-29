@@ -30,6 +30,9 @@ devnet-filldaemon:
 devnet-helper:
 	$(PYTHON) helper_daemon.py --params-file devnet.json --private-key 0xa692455191ed752fd4f55499c73de38a0fc921150221194cf0e779f0da823b42 --use-faucet
 
+devnet-arbitrator:
+	$(PYTHON) helper_daemon.py --params-file devnet.json --random-key
+
 # See: https://aptos.dev/network/nodes/localnet
 localnet:
 	$(APTOS) node run-local-testnet --force-restart --assume-yes --with-indexer-api

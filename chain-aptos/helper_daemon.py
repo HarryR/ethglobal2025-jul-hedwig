@@ -223,6 +223,12 @@ class HelperDaemon:
         account_addr = AccountAddress.from_str(address)
         return await self.rest_client.account_balance(account_addr)
     
+    async def get_htlc_info(self, secret_hash:str) -> dict:
+        if secret_hash.startswith('0x'):
+            secret_hash = secret_hash[2:]
+        secret_hash_bytes = bytes.fromhex(secret_hash)
+        return await self.rest_client.get_htlc_info(self.contract_address, secret_hash_bytes)
+    
     async def txwait(self, transaction_id:str) -> dict:
         await self.rest_client.wait_for_transaction(transaction_id)
         return await self.rest_client.transaction_by_hash(transaction_id)
@@ -452,6 +458,16 @@ def create_flask_app(daemon: HelperDaemon) -> Quart:
             }), 400
         balance = await daemon.get_balance(account)
         return jsonify({'balance': balance})
+    
+    @app.route('/aptos/<network>/destination_htlc/0x<secret_hash>', methods=['GET'])
+    async def get_destination_htlc(network:str, secret_hash:str):
+        if network != daemon.network:
+            return jsonify({
+                "success": False,
+                "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
+            }), 400
+        info = await daemon.get_htlc_info(secret_hash)
+        return jsonify(info)
     
     @app.route('/aptos/<network>/txwait/<transaction_id>', methods=['GET'])
     async def txwait(network:str, transaction_id:str):

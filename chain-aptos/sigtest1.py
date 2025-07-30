@@ -107,6 +107,38 @@ class HTLCOrder:
             "destination_amount": self.destination_amount,
         }
 
+def arbitrator_sign(
+    acct:Account,
+    status: int,
+    secret_hash: bytes,
+    deadline:int,
+    destination_chain:bytes,
+    destination_token:bytes,
+    destination_amount:int,
+    destination_address:bytes):
+    ser = Serializer()
+    ser.u8(status)                  # arbitrator_status
+    ser.to_bytes(secret_hash)       # secret_hash
+    ser.u64(deadline)               # deadline
+    ser.to_bytes(destination_chain)
+    ser.to_bytes(destination_token)
+    ser.u256(destination_amount)         
+    ser.to_bytes(destination_address)
+    decision_bcs = ser.output()
+    return {
+        'decision_bcs': decision_bcs.hex(),
+        'decision_sig': str(acct.sign(decision_bcs))
+    }
+
+def arbitrator_sign_from_order(acct:Account, order:HTLCOrder, status:int):
+    return arbitrator_sign(acct, status,
+                           secret_hash=order.secret_hash,
+                           deadline=order.resolver_action_deadline,
+                           destination_chain=order.destination_chain,
+                           destination_token=order.destination_token,
+                           destination_amount=order.destination_amount,
+                           destination_address=order.destination_address)
+
 def create_test_order_and_sign() -> Dict[str, Any]:
     """
     Create a test HTLC order with deterministic values for testing
@@ -153,9 +185,9 @@ def create_test_order_and_sign() -> Dict[str, Any]:
     order_bcs = order.to_bcs()
     
     # Sign the order with all three parties
-    user_signature = user_account.sign(order_bcs)
+    #user_signature = user_account.sign(order_bcs)
     resolver_signature = resolver_account.sign(order_bcs)
-    arbitrator_signature = arbitrator_account.sign(order_bcs)
+    #arbitrator_signature = arbitrator_account.sign(order_bcs)
     
     print("=== Test HTLC Order Created and Signed ===")
     print(f"Order hash: {order.hash().hex()}")
@@ -164,16 +196,16 @@ def create_test_order_and_sign() -> Dict[str, Any]:
     print(f"Resolver address: {resolver_account.address()}")
     print(f"Arbitrator address: {arbitrator_account.address()}")
     print()
-    
+
     return {
         "order": order.to_dict(),
         "order_bcs": order_bcs.hex(),
         "order_hash": order.hash().hex(),
         "secret": secret.hex(),
         "signatures": {
-            "user_signature": str(user_signature),
+            #"user_signature": str(user_signature),
             "resolver_signature": str(resolver_signature),
-            "arbitrator_signature": str(arbitrator_signature)
+            #"arbitrator_signature": str(arbitrator_signature)
         },
         "accounts": {
             "user_private_key": str(user_account.private_key),
@@ -190,21 +222,34 @@ def create_test_order_and_sign() -> Dict[str, Any]:
             "arbitrator_address": arbitrator_account.auth_key(),
             "venue_public_key": str(venue_account.public_key()),
             "venue_address": venue_account.auth_key(),
+        },
+        "arbitrator": {
+            0: arbitrator_sign_from_order(arbitrator_account, order, 0),
+            1: arbitrator_sign_from_order(arbitrator_account, order, 1),
         }
     }
+
+# Convert hex strings to Move vector format
+def hex_to_move_vector(hex_str: str|bytes) -> str:
+    if isinstance(hex_str, bytes):
+        hex_str = hex_str.hex()
+    if hex_str.startswith('0x'):
+        hex_str = hex_str[2:]
+    bytes_list = [f"0x{hex_str[i:i+2]}" for i in range(0, len(hex_str), 2)]
+    return f"vector[{', '.join(bytes_list)}]"
 
 def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
     """
     Generate Move test constants that can be embedded in your test file
     """
     order_bcs = order_data["order_bcs"]
-    user_sig = order_data["signatures"]["user_signature"][2:]  # Remove 0x
-    resolver_sig = order_data["signatures"]["resolver_signature"][2:]
-    
-    # Convert hex strings to Move vector format
-    def hex_to_move_vector(hex_str: str) -> str:
-        bytes_list = [f"0x{hex_str[i:i+2]}" for i in range(0, len(hex_str), 2)]
-        return f"vector[{', '.join(bytes_list)}]"
+    #user_sig = order_data["signatures"]["user_signature"][2:]
+    resolver_sig = order_data["signatures"]["resolver_signature"]
+
+    arb_stuff = order_data['arbitrator'][1]
+    print("Arb Stuff", arb_stuff)
+    arb_decision_signature = arb_stuff['decision_sig']
+    arb_decision = arb_stuff['decision_bcs']
     
     move_test = f"""
     // Test constants for HTLC order verification
@@ -217,7 +262,6 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
         let order_bcs = {hex_to_move_vector(order_bcs)};
         
         // Signatures
-        //let user_signature = {hex_to_move_vector(user_sig)};
         let resolver_signature = {hex_to_move_vector(resolver_sig)};
         
         // Expected addresses
@@ -226,7 +270,7 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
         let expected_arbitrator_address = @0x{order_data['public_keys']['arbitrator_address'][2:]};
     
         // This should succeed
-        let (_, verified) = verify_order_internal(
+        let (order, verified) = verify_order_internal(
             order_bcs,
             //user_signature,
             resolver_signature
@@ -235,6 +279,10 @@ def generate_move_test_constants(order_data: Dict[str, Any]) -> str:
         assert!(verified.user_address == expected_user_address);
         assert!(verified.resolver_address == expected_resolver_address);
         assert!(verified.arbitrator_address == expected_arbitrator_address);
+
+        let arb_decision = {hex_to_move_vector(arb_decision)};
+        let arb_decision_signature = {hex_to_move_vector(arb_decision_signature)};
+        let decision = verify_arbitrator_decision(&order, arb_decision, arb_decision_signature);
     }}
     
     // Test data breakdown:

@@ -234,10 +234,35 @@ def create_account(args: argparse.Namespace) -> Account:
     else:
         raise ValueError("No account method specified. Use --private-key, --private-key-env, or --random-key")
 
-def parse_hex(x:str):
+def parse_hex(x:str|bytes):
+    if isinstance(x, bytes):
+        return x
     if x.startswith('0x'):
         x = x[2:]
     return bytes.fromhex(x)
+
+def arbitrator_sign(
+    acct:Account,
+    status: int,
+    secret_hash: bytes,
+    deadline:int,
+    destination_chain:bytes,
+    destination_token:bytes,
+    destination_amount:int,
+    destination_address:bytes):
+    ser = Serializer()
+    ser.u8(status)                  # arbitrator_status
+    ser.to_bytes(secret_hash)       # secret_hash
+    ser.u64(deadline)               # deadline
+    ser.to_bytes(destination_chain)
+    ser.to_bytes(destination_token)
+    ser.u256(destination_amount)         
+    ser.to_bytes(destination_address)
+    decision_bcs = ser.output()
+    return {
+        'decision_bcs': decision_bcs.hex(),
+        'decision_sig': str(acct.sign(decision_bcs))
+    }
 
 def create_flask_app(daemon: ArbitratorDaemon) -> Quart:
     """Create and configure the Flask application."""
@@ -257,10 +282,14 @@ def create_flask_app(daemon: ArbitratorDaemon) -> Quart:
             raise ValueError("No JSON data provided")
 
         secret_hash = parse_hex(data['secret_hash'])
-        expected_deadline = int(data['deadline'])
+        deadline = int(data['deadline'])
         destination_amount = data['destination_amount']
         destination_chain = parse_hex(data['destination_chain'])
+        destination_token = parse_hex(data['destination_token'])
         destination_address = parse_hex(data['destination_address'])
+
+        # native gas token is 0
+        expected_token = bytes([0])
 
         expected_chain = f"aptos-{network}"
         expected_chain_bytes = expected_chain.encode('utf-8')
@@ -274,36 +303,43 @@ def create_flask_app(daemon: ArbitratorDaemon) -> Quart:
 
         info = await daemon.get_htlc_info(secret_hash)
 
-        if expected_deadline != info['deadline']:
+        if deadline != info['deadline']:
             return jsonify({
                 "success": False,
-                "error": f"Deadline mismatch, got {info['deadline']} expected {expected_deadline}",
+                "error": f"Deadline mismatch, got {deadline} expected {info['deadline']}",
                 "code": "WRONG_DEADLINE",
             }), 400
 
-        if destination_address != info['user_address']:
+        if destination_token != expected_token:
             return jsonify({
                 "success": False,
-                "error": f"Destination address mismatch, got {info['user_address']} expected {destination_address}",
+                "error": f"Destination token mismatch, got {destination_token.hex()} expected {expected_token.hex()}",
+                "code": "WRONG_TOKEN",
+            }), 400
+
+        if destination_address != parse_hex(info['user_address']):
+            return jsonify({
+                "success": False,
+                "error": f"Destination address mismatch, got {destination_address} expected {info['user_address']}",
                 "code": "WRONG_ADDRESS",
             }), 400
 
         if destination_amount != info['amount']:
             return jsonify({
                 "success": False,
-                "error": f"Destination amount mismatch, got {info['amount']} expected {destination_amount}",
+                "error": f"Destination amount mismatch, got {destination_amount} expected {info['amount']}",
                 "code": "WRONG_AMOUNT",
             }), 400
 
         # Sign it in a format 
-        ser = Serializer()
-        ser.u8(1)
-        ser.to_bytes(secret_hash)
-        ser.u64(expected_deadline)
-        ser.u64(destination_amount)
-        ser.to_bytes(destination_chain)
-        ser.to_bytes(destination_address)
-        signature = daemon.claimer.sign(ser.output())
+        signature = arbitrator_sign(
+            acct=daemon.claimer,
+            secret_hash=secret_hash,
+            deadline=deadline,
+            destination_address=destination_address,
+            destination_amount=destination_amount,
+            destination_chain=destination_chain,
+            destination_token=destination_token)
 
         return jsonify({
             'info': info,

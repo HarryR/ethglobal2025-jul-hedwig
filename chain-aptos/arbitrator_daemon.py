@@ -333,6 +333,7 @@ def create_flask_app(daemon: ArbitratorDaemon) -> Quart:
 
         # Sign it in a format 
         signature = arbitrator_sign(
+            status=deadline < time.time(), 
             acct=daemon.claimer,
             secret_hash=secret_hash,
             deadline=deadline,
@@ -426,15 +427,14 @@ async def main():
     
     print(f"🚀 Starting HTLC Arbitrator Daemon on {args.host}:{args.port}")
     print(f"   Endpoints:")
-    print(f"     POST /aptos/{config['network']}/arbitrate/0x<secret_hash>")
+    print(f"     POST /aptos/{config['network']}/arbitrate.aptos")
     print(f"     GET /aptos/{config['network']}/health.arbitrator")
     
     # Run Flask app
     await app.run_task(host=args.host, port=args.port, debug=False)
 
     # Clean up
-    if 'daemon' in locals():
-        await daemon.close()
+    await daemon.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

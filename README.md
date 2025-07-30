@@ -17,7 +17,14 @@ make docker-build docker-shell
 See the `chain-aptos` directory:
 
  * Source & Destination HTLC
- * Resolver daemons
+ * Resolver & Arbitrator daemons
+
+## Ethereum
+
+See the `chain-solidity` directory:
+
+ * Destination HTLC
+ * Resolver & Arbitrator daemons
 
 ## Coding Music
 
@@ -34,4 +41,6 @@ Music makes the world go round ☺️🎶🪩🎆
  * https://www.youtube.com/watch?v=Op4srH2uoWw
  * https://www.youtube.com/watch?v=P0GpUQpMBZY
  * https://soundcloud.com/minitelofc/3615-captain-mustache
- 
+ * https://soundcloud.com/discoanon/hot-to-the-touch-episode-268
+ * magnet:?xt=urn:btih:2976448c1a5c514937341c17ba354cc988f49924
+ * https://soundcloud.com/discowaltons/ep11-poco-the-disco-waltons-mix-sessions-20th-july-2025

@@ -2,7 +2,12 @@
 pragma solidity ^0.8.19;
 
 contract TestRejectingReceiver {
+    // Reject all ETH transfers
     receive() external payable {
-        require(false, "No!");
+        revert("Rejecting ETH transfer");
+    }
+    
+    fallback() external payable {
+        revert("Rejecting ETH transfer");
     }
 }

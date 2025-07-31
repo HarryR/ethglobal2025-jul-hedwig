@@ -517,7 +517,7 @@ describe("DestinationHTLC", function () {
         expect(htlcInfo[2]).to.equal(largeAmount);
       } catch (error) {
         // If resolver doesn't have enough balance, that's expected
-        expect(error.message).to.include("doesn't have enough funds");
+        expect((error as Error).message).to.include("doesn't have enough funds");
       }
     });
 
@@ -606,20 +606,3 @@ describe("DestinationHTLC", function () {
     });
   });
 });
-
-// Helper contract for testing transfer failures
-const TestRejectingReceiverSource = `
-  // SPDX-License-Identifier: AGPL-3.0-only
-  pragma solidity ^0.8.19;
-  
-  contract TestRejectingReceiver {
-      // Reject all ETH transfers
-      receive() external payable {
-          revert("Rejecting ETH transfer");
-      }
-      
-      fallback() external payable {
-          revert("Rejecting ETH transfer");
-      }
-  }
-`;

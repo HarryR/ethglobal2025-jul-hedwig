@@ -1,5 +1,6 @@
 import '@nomicfoundation/hardhat-ethers';
 import 'hardhat-tracer';
+import '@nomicfoundation/hardhat-chai-matchers';
 import { promises as fs } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';

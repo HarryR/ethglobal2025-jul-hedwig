@@ -145,17 +145,17 @@ def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[st
     # Command line arguments take precedence
     if args.network:
         config['network'] = args.network
-    if args.contract_address:
-        config['contract_address'] = args.contract_address
+    if args.dhtlc_address:
+        config['dhtlc_address'] = args.dhtlc_address
     if args.node_url:
         config['node_url'] = args.node_url
     if args.chain_id:
-        config['chain_id'] = args.chain_id
+        config['chain_id'] = int(args.chain_id)
     
     # Ensure we have required fields
     if 'network' not in config:
         raise ValueError("Network must be specified in params file or command line")
-    if 'contract_address' not in config:
+    if 'dhtlc_address' not in config:
         raise ValueError("Contract address must be specified in params file or command line")
     
     # Fill in defaults if not specified
@@ -175,7 +175,7 @@ class HTLCHelperClient:
     def __init__(self, config: Dict[str, Any], claimer_account: Account):
         self.network = config['network']
         self.config = config
-        self.contract_address = AsyncWeb3.to_checksum_address(config['contract_address'])
+        self.dhtlc_address = AsyncWeb3.to_checksum_address(config['dhtlc_address'])
         self.claimer_account = claimer_account
         
         # Initialize web3 client
@@ -183,7 +183,7 @@ class HTLCHelperClient:
         
         # Create contract instance
         self.contract = self.w3.eth.contract(
-            address=self.contract_address,
+            address=self.dhtlc_address,
             abi=CONTRACT_ABI
         )
     
@@ -399,9 +399,9 @@ class HelperDaemon:
                     "hash_verification": "passed",
                     "network": self.network,
                     "claimer_address": self.claimer_account.address,
-                    "contract_address": self.client.contract_address,
+                    "dhtlc_address": self.client.dhtlc_address,
                     "node_url": self.config.get('node_url'),
-                    "chain_id": self.config.get('chain_id')
+                    "chain_id": int(self.config.get('chain_id'))
                 }
             else:
                 print("❌ Hash verification failed!")
@@ -412,7 +412,7 @@ class HelperDaemon:
                     "error": f"Expected {expected_hash.hex()}, got {contract_hash.hex()}",
                     "network": self.network,
                     "claimer_address": self.claimer_account.address,
-                    "contract_address": self.client.contract_address
+                    "dhtlc_address": self.client.dhtlc_address
                 }
         except Exception as e:
             print(f"❌ Health check failed: {e}")
@@ -422,7 +422,7 @@ class HelperDaemon:
                 "error": str(e),
                 "network": self.network,
                 "claimer_address": self.claimer_account.address,
-                "contract_address": self.client.contract_address
+                "dhtlc_address": self.client.dhtlc_address
             }
     
     async def reveal_secret_transaction(self, secret_bytes: HexBytes) -> Dict[str, Any]:
@@ -748,7 +748,7 @@ async def main():
     # Network and contract configuration (can override params file)
     parser.add_argument("--network", choices=DEFAULT_NETWORK_CONFIGS.keys(),
                        help="Network to connect to")
-    parser.add_argument("--contract-address", help="Address where the HTLC contract is deployed")
+    parser.add_argument("--dhtlc-address", help="Address where the DestinationHTLC contract is deployed")
     parser.add_argument("--node-url", help="RPC node URL")
     parser.add_argument("--chain-id", type=int, help="Chain ID")
     
@@ -760,7 +760,7 @@ async def main():
                              help="Generate random account (for testing)")
     
     # Server configuration
-    parser.add_argument("--port", type=int, default=7301, help="Port to run the server on")
+    parser.add_argument("--port", type=int, default=7401, help="Port to run the server on")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
     
     args = parser.parse_args()
@@ -770,7 +770,7 @@ async def main():
     
     print(f"📋 Configuration loaded:")
     print(f"   Network: {config['network']}")
-    print(f"   Contract: {config['contract_address']}")
+    print(f"   Contract: {config['dhtlc_address']}")
     print(f"   Node URL: {config['node_url']}")
     print(f"   Chain ID: {config.get('chain_id', 'auto-detect')}")
     

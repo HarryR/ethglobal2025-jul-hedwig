@@ -42,6 +42,33 @@ task(TASK_EXPORT_ABIS, async (_args, hre) => {
   );
 }).setDescription('Saves ABI and bytecode to the "abis" directory');
 
+task('info', async (_args, hre) => {
+  const [signer] = await hre.ethers.getSigners();
+  console.log('Address', signer.address);
+  console.log('Network', hre.network.name)
+}).setDescription('Show some info');
+
+task('deploy', async (_args, hre) => {
+  const {ethers} = hre;
+
+  const dhtlc_factory = await ethers.getContractFactory('DestinationHTLC');
+  const dhtlc = await dhtlc_factory.deploy();
+  const tx = dhtlc.deploymentTransaction()!;
+  console.log('tx', tx.hash)
+  await tx.wait();
+
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+
+  const config = {
+    'node_url': (hre.network.config as any).url,
+    'chain_id': chainId.toString(10),
+    'dhtlc_address': await dhtlc.getAddress(),
+    'network': hre.network.name,
+  };
+  console.log('Config', config);
+  await fs.writeFile(`${hre.network.name}.json`, JSON.stringify(config));
+}).setDescription('Deploy contracts onto chain');
+
 const TEST_HDWALLET = {
   mnemonic: 'test test test test test test test test test test test junk',
   path: "m/44'/60'/0'/0",
@@ -60,24 +87,14 @@ const config: HardhatUserConfig = {
     hardhat_local: {
       url: 'http://127.0.0.1:8545/',
     },
-    sapphire: {
-      url: 'https://sapphire.oasis.io',
-      chainId: 0x5afe,
+    'monad-testnet': {
+      url: 'https://testnet-rpc.monad.xyz/',
+      chainId: 10143,
       accounts,
     },
-    'sapphire-testnet': {
-      url: 'https://testnet.sapphire.oasis.dev',
-      chainId: 0x5aff,
-      accounts,
-    },
-    'sapphire-localnet': {
-      url: 'http://127.0.0.1:8545',
-      chainId: 0x5afd,
-      accounts,
-    },
-    'pontusx-testnet': {
-      url: 'https://rpc.test.pontus-x.eu',
-      chainId: 0x7ec9,
+    'etherlink-testnet': {
+      url: 'https://node.ghostnet.etherlink.com/',
+      chainId: 128123,
       accounts,
     },
   },

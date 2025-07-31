@@ -552,7 +552,7 @@ async def main():
                              help="Generate random account (for testing)")
     
     # Server configuration
-    parser.add_argument("--port", type=int, default=7300, help="Port to run the server on")
+    parser.add_argument("--port", type=int, default=7400, help="Port to run the server on")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
     
     args = parser.parse_args()

@@ -512,7 +512,7 @@ async def main():
     account_group.add_argument("--random-key", action="store_true", help="Generate random account")
     
     # Server configuration
-    parser.add_argument("--port", type=int, default=7302, help="Port to run the server on")
+    parser.add_argument("--port", type=int, default=7402, help="Port to run the server on")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind the server to")
     
     args = parser.parse_args()

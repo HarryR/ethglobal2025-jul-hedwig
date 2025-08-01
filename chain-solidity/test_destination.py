@@ -7,12 +7,13 @@ import sys
 import requests
 
 def main():
-    network = 'devnet'
-    fill_url = f'http://localhost:7400/aptos/{network}'
-    helper_url = f'http://localhost:7401/aptos/{network}'
-    arbitrator_url = f'http://localhost:7402/aptos/{network}'
+    network = 'hardhat_local'
+    fill_url = f'http://localhost:7400/ethereum/{network}'
+    helper_url = f'http://localhost:7401/ethereum/{network}'
+    arbitrator_url = f'http://localhost:7402/ethereum/{network}'
 
     fill_health = requests.get(f'{fill_url}/health.fill').json()
+    #print("Fill Health", fill_health)
     assert fill_health['status'] == 'healthy'
     print("✅ Fill daemon healthy")
 
@@ -24,11 +25,13 @@ def main():
     secret_hex = f"0x{secret.hex()}"
     secret_hash = sha256(secret).digest()
     secret_hash_hex = f"0x{secret_hash.hex()}"
-    user_address = f"0x{urandom(32).hex()}"
+    user_address = f"0x{urandom(20).hex()}"
     deadline = int(time() + 7200)
     amount = randint(10,100)
 
-    user_balance_before = requests.get(f'{helper_url}/balance/{user_address}').json()['balance']
+    user_balance_before = requests.get(f'{helper_url}/balance/{user_address}').json()
+    print("Balance Before Raw", user_balance_before)
+    user_balance_before = user_balance_before['balance']
     assert user_balance_before == 0
 
     fill_obj = {
@@ -57,6 +60,5 @@ def main():
     reveal_tx = requests.get(f'{helper_url}/txwait/{reveal_resp["transaction_hash"]}').json()
     print("Reveal TX", reveal_tx)
     
-
 if __name__ == "__main__":
     sys.exit(main())

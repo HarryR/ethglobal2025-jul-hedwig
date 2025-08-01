@@ -103,7 +103,6 @@ describe("DestinationHTLC", function () {
       expect(htlcInfo[1]).to.equal(resolver.address); // resolverAddress
       expect(htlcInfo[2]).to.equal(HTLC_AMOUNT); // amount
       expect(htlcInfo[3]).to.equal(deadline); // deadline
-      expect(htlcInfo[4]).to.be.false; // claimed
     });
 
     it("Should revert if no ETH sent", async function () {
@@ -227,8 +226,7 @@ describe("DestinationHTLC", function () {
       expect(userBalanceAfter - userBalanceBefore).to.equal(HTLC_AMOUNT);
       
       // Verify HTLC is marked as claimed
-      const htlcInfo = await htlc.getHTLCInfo(secretHash);
-      expect(htlcInfo[4]).to.be.true; // claimed
+      expect(await htlc.doesHTLCExist(secretHash)).to.be.false;
     });
 
     it("Should revert with wrong secret", async function () {
@@ -258,7 +256,7 @@ describe("DestinationHTLC", function () {
       // Second reveal should fail
       await expect(
         htlc.connect(other).revealSecret(SECRET)
-      ).to.be.revertedWithCustomError(htlc, "HTLCAlreadyClaimed");
+      ).to.be.revertedWithCustomError(htlc, "HTLCNotFound");
     });
 
     it("Should allow reveal even after deadline (before refund)", async function () {
@@ -336,8 +334,7 @@ describe("DestinationHTLC", function () {
       expect(resolverBalanceAfter - resolverBalanceBefore + gasUsed).to.equal(HTLC_AMOUNT);
       
       // Verify HTLC is marked as claimed
-      const htlcInfo = await htlc.getHTLCInfo(secretHash);
-      expect(htlcInfo[4]).to.be.true; // claimed
+      expect(await htlc.doesHTLCExist(secretHash)).to.be.false;
     });
 
     it("Should revert if deadline hasn't passed", async function () {
@@ -375,7 +372,7 @@ describe("DestinationHTLC", function () {
       // Second refund should fail
       await expect(
         htlc.connect(resolver).claimRefund(secretHash)
-      ).to.be.revertedWithCustomError(htlc, "HTLCAlreadyClaimed");
+      ).to.be.revertedWithCustomError(htlc, "HTLCNotFound");
     });
 
     it("Should revert if already revealed", async function () {
@@ -387,7 +384,7 @@ describe("DestinationHTLC", function () {
       // Refund should fail
       await expect(
         htlc.connect(resolver).claimRefund(secretHash)
-      ).to.be.revertedWithCustomError(htlc, "HTLCAlreadyClaimed");
+      ).to.be.revertedWithCustomError(htlc, "HTLCNotFound");
     });
 
     it("Should allow anyone to call refund (not just resolver)", async function () {
@@ -432,7 +429,6 @@ describe("DestinationHTLC", function () {
       expect(htlcInfo[1]).to.equal(resolver.address); // resolverAddress
       expect(htlcInfo[2]).to.equal(HTLC_AMOUNT); // amount
       expect(htlcInfo[3]).to.equal(deadline); // deadline
-      expect(htlcInfo[4]).to.be.false; // claimed
     });
 
     it("Should return correct existence status", async function () {
@@ -549,11 +545,8 @@ describe("DestinationHTLC", function () {
       await htlc.revealSecret(secret1);
       
       // Only first should be claimed
-      const htlc1Info = await htlc.getHTLCInfo(secretHash1);
-      const htlc2Info = await htlc.getHTLCInfo(secretHash2);
-      
-      expect(htlc1Info[4]).to.be.true; // claimed
-      expect(htlc2Info[4]).to.be.false; // not claimed
+      expect(await htlc.doesHTLCExist(secretHash1)).to.be.false;
+      expect(await htlc.doesHTLCExist(secretHash2)).to.be.true;
     });
 
     it("Should maintain correct contract balance", async function () {

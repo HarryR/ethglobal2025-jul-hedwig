@@ -269,43 +269,24 @@ class HTLCHelperClient:
         except ContractLogicError:
             # HTLC doesn't exist
             return None
-        except Exception as e:
-            print(f"❌ Error getting HTLC info: {e}")
-            return None
     
     async def hash_secret(self, secret: HexBytes) -> HexBytes:
         """Call the contract's hashSecret view function."""
-        try:
-            result = await self.contract.functions.hashSecret(secret).call()
-            return HexBytes(result)
-        except Exception as e:
-            print(f"❌ Error hashing secret: {e}")
-            # Fallback to local calculation
-            return HexBytes(hashlib.sha256(secret).digest())
+        result = await self.contract.functions.hashSecret(secret).call()
+        return HexBytes(result)
+            
     
     async def does_htlc_exist(self, secret_hash: HexBytes) -> bool:
         """Check if HTLC exists."""
-        try:
-            return await self.contract.functions.doesHTLCExist(secret_hash).call()
-        except Exception as e:
-            print(f"❌ Error checking HTLC existence: {e}")
-            return False
+        return await self.contract.functions.doesHTLCExist(secret_hash).call()
     
     async def is_claimable(self, secret_hash: HexBytes) -> bool:
         """Check if HTLC is claimable."""
-        try:
-            return await self.contract.functions.isClaimable(secret_hash).call()
-        except Exception as e:
-            print(f"❌ Error checking if claimable: {e}")
-            return False
+        return await self.contract.functions.isClaimable(secret_hash).call()
     
     async def is_refundable(self, secret_hash: HexBytes) -> bool:
         """Check if HTLC is refundable."""
-        try:
-            return await self.contract.functions.isRefundable(secret_hash).call()
-        except Exception as e:
-            print(f"❌ Error checking if refundable: {e}")
-            return False
+        return await self.contract.functions.isRefundable(secret_hash).call()
 
 
 class HelperDaemon:
@@ -614,11 +595,8 @@ def create_quart_app(daemon: HelperDaemon) -> Quart:
                 "success": False,
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
-        try:
-            balance = await daemon.get_balance(account)
-            return jsonify({'balance': balance})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        balance = await daemon.get_balance(account)
+        return jsonify({'balance': balance})
     
     @app.route('/ethereum/<network>/destination_htlc/0x<secret_hash>', methods=['GET'])
     async def get_destination_htlc(network: str, secret_hash: str):
@@ -627,11 +605,8 @@ def create_quart_app(daemon: HelperDaemon) -> Quart:
                 "success": False,
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
-        try:
-            info = await daemon.get_htlc_info(secret_hash)
-            return jsonify(info)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        info = await daemon.get_htlc_info(secret_hash)
+        return jsonify(info)
     
     @app.route('/ethereum/<network>/txwait/<transaction_id>', methods=['GET'])
     async def txwait(network: str, transaction_id: str):
@@ -640,11 +615,8 @@ def create_quart_app(daemon: HelperDaemon) -> Quart:
                 "success": False,
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
-        try:
-            result = await daemon.txwait(transaction_id)
-            return jsonify(result)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        result = await daemon.txwait(transaction_id)
+        return jsonify(result)
     
     @app.route('/ethereum/<network>/reveal', methods=['POST'])
     async def reveal_secret_endpoint(network: str):
@@ -657,34 +629,28 @@ def create_quart_app(daemon: HelperDaemon) -> Quart:
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
         
-        try:
-            # Parse request JSON
-            data = await request.get_json()
-            if not data:
-                raise ValueError("No JSON data provided")
-            
-            secret_str: str = data.get("secret")
-            if not secret_str:
-                raise ValueError("Missing required field: secret")
-            
-            if secret_str.startswith('0x'):
-                secret_str = secret_str[2:]
-            
-            # Pad to 32 bytes if needed
-            if len(secret_str) < 64:
-                secret_str = secret_str.ljust(64, '0')
-            
-            secret_bytes = HexBytes(secret_str)
-            
-            # Reveal secret asynchronously
-            result = await daemon.reveal_secret_transaction(secret_bytes)
-            status_code = 200 if result["success"] else 400
-            return jsonify(result), status_code
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": str(e)
-            }), 400
+        # Parse request JSON
+        data = await request.get_json()
+        if not data:
+            raise ValueError("No JSON data provided")
+        
+        secret_str: str = data.get("secret")
+        if not secret_str:
+            raise ValueError("Missing required field: secret")
+        
+        if secret_str.startswith('0x'):
+            secret_str = secret_str[2:]
+        
+        # Pad to 32 bytes if needed
+        if len(secret_str) < 64:
+            secret_str = secret_str.ljust(64, '0')
+        
+        secret_bytes = HexBytes(secret_str)
+        
+        # Reveal secret asynchronously
+        result = await daemon.reveal_secret_transaction(secret_bytes)
+        status_code = 200 if result["success"] else 400
+        return jsonify(result), status_code
     
     @app.route('/ethereum/<network>/refund', methods=['POST'])
     async def claim_refund_endpoint(network: str):
@@ -697,27 +663,21 @@ def create_quart_app(daemon: HelperDaemon) -> Quart:
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
         
-        try:
-            # Parse request JSON
-            data = await request.get_json()
-            if not data:
-                raise ValueError("No JSON data provided")
-            
-            secret_hash = data.get("secret_hash")
-            
-            # Validate required fields
-            if not secret_hash:
-                raise ValueError("Missing required field: secret_hash")
-            
-            # Claim refund asynchronously
-            result = await daemon.claim_refund_transaction(secret_hash)
-            status_code = 200 if result["success"] else 400
-            return jsonify(result), status_code
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": str(e)
-            }), 400
+        # Parse request JSON
+        data = await request.get_json()
+        if not data:
+            raise ValueError("No JSON data provided")
+        
+        secret_hash = data.get("secret_hash")
+        
+        # Validate required fields
+        if not secret_hash:
+            raise ValueError("Missing required field: secret_hash")
+        
+        # Claim refund asynchronously
+        result = await daemon.claim_refund_transaction(secret_hash)
+        status_code = 200 if result["success"] else 400
+        return jsonify(result), status_code
     
     @app.route('/ethereum/<network>/health.helper', methods=['GET'])
     async def health_check_endpoint(network: str):

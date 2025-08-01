@@ -29,8 +29,11 @@ deploy-monad-testnet:
 deploy-etherlink-testnet:
 	PRIVATE_KEY=$(PRIVATE_KEY) pnpm hardhat --network etherlink-testnet deploy
 
+daemon-arbitrator-localnet:
+	python3 arbitrator.py --params-file hardhat_local.json --private-key $(LOCALNET_PRIVATE_KEY)
+
 daemon-filler-localnet:
-	pass
+	python3 fill_daemon.py --params-file hardhat_local.json --private-key $(LOCALNET_PRIVATE_KEY)
 
 daemon-helper-localnet:
-	python3 helper_daemon.py --params-file hardhat_local.json --random-key
+	python3 helper_daemon.py --params-file hardhat_local.json --private-key $(LOCALNET_PRIVATE_KEY)

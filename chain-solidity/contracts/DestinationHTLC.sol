@@ -50,7 +50,20 @@ contract DestinationHTLC {
         address resolverAddress;    // Who deposited the funds
         uint256 amount;            // Amount locked
         uint256 deadline;          // When the lock expires
-        bool claimed;              // Whether funds have been claimed/refunded
+    }
+
+    bytes32 public constant ARBITRATOR_DECISION_TYPEHASH = keccak256(
+        "ArbitratorDecision(uint8 decision,bytes32 secretHash,uint256 deadline,bytes32 destinationChain,bytes destinationToken,uint256 destinationAmount,bytes destinationAddress)"
+    );
+
+    struct ArbitratorDecision {
+        bool decision;
+        bytes32 secretHash;
+        uint256 deadline;
+        bytes32 destinationChain;
+        bytes destinationToken;
+        uint256 destinationAmount;
+        bytes destinationAddress;
     }
     
     // ============ State Variables ============
@@ -65,6 +78,48 @@ contract DestinationHTLC {
     }
     
     // ============ External Functions ============
+
+
+    function internal_hashDecision(ArbitratorDecision memory decision)
+        internal pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(
+            ARBITRATOR_DECISION_TYPEHASH,
+            decision.decision,
+            decision.secretHash,
+            decision.deadline,
+            decision.destinationChain,
+            keccak256(decision.destinationToken),
+            decision.destinationAmount,
+            keccak256(decision.destinationAddress)
+        ));
+    }
+
+    function decision_make(
+        bool status,
+        bytes32 secretHash,
+        uint256 deadline,  
+        bytes32 destinationChain,
+        bytes memory destinationToken,
+        uint256 destinationAmount,
+        bytes memory destinationAddress      
+    )
+        public pure
+        returns (ArbitratorDecision memory decision, bytes32 structHash)
+    {
+        decision = ArbitratorDecision({
+            decision: status,
+            secretHash: secretHash,
+            deadline: deadline,
+            destinationChain: destinationChain,
+            destinationToken: destinationToken,
+            destinationAmount: destinationAmount,
+            destinationAddress: destinationAddress
+        });
+
+        structHash = internal_hashDecision(decision);
+    }
     
     /**
      * @notice Create a new HTLC by depositing ETH
@@ -90,8 +145,7 @@ contract DestinationHTLC {
             userAddress: userAddress,
             resolverAddress: msg.sender,
             amount: msg.value,
-            deadline: deadline,
-            claimed: false
+            deadline: deadline
         });
         
         emit HTLCCreated(secretHash, userAddress, msg.sender, msg.value, deadline);
@@ -109,14 +163,11 @@ contract DestinationHTLC {
         
         HTLC storage htlc = htlcs[secretHash];
         
-        if (htlc.claimed) revert HTLCAlreadyClaimed();
-        
-        // Mark as claimed first (CEI pattern)
-        htlc.claimed = true;
-        
         // Transfer funds to user
         uint256 amount = htlc.amount;
         address userAddress = htlc.userAddress;
+
+        delete htlcs[secretHash];
         
         (bool success, ) = payable(userAddress).call{value: amount}("");
         if (!success) revert TransferFailed();
@@ -128,20 +179,20 @@ contract DestinationHTLC {
      * @notice Claim refund after the deadline has passed
      * @param secretHash Hash of the secret for the HTLC to refund
      */
-    function claimRefund(bytes32 secretHash) external {
-        if (htlcs[secretHash].userAddress == address(0)) revert HTLCNotFound();
-        
+    function claimRefund(bytes32 secretHash)
+        external
+    {
         HTLC storage htlc = htlcs[secretHash];
-        
-        if (htlc.claimed) revert HTLCAlreadyClaimed();
+
+        if (htlc.userAddress == address(0)) revert HTLCNotFound();
+
         if (block.timestamp < htlc.deadline) revert HTLCNotExpired();
-        
-        // Mark as claimed first (CEI pattern)
-        htlc.claimed = true;
         
         // Transfer funds back to resolver
         uint256 amount = htlc.amount;
         address resolverAddress = htlc.resolverAddress;
+
+        delete htlcs[secretHash];
         
         (bool success, ) = payable(resolverAddress).call{value: amount}("");
         if (!success) revert TransferFailed();
@@ -154,33 +205,17 @@ contract DestinationHTLC {
     /**
      * @notice Get HTLC information
      * @param secretHash Hash of the secret
-     * @return userAddress Address that can claim the funds
-     * @return resolverAddress Address that deposited the funds
-     * @return amount Amount locked in the HTLC
-     * @return deadline When the lock expires
-     * @return claimed Whether the HTLC has been claimed or refunded
+     * @return info Order info
      */
     function getHTLCInfo(bytes32 secretHash) 
         external 
         view 
-        returns (
-            address userAddress,
-            address resolverAddress,
-            uint256 amount,
-            uint256 deadline,
-            bool claimed
-        ) 
+        returns (HTLC memory info)
     {
         if (htlcs[secretHash].userAddress == address(0)) revert HTLCNotFound();
         
         HTLC storage htlc = htlcs[secretHash];
-        return (
-            htlc.userAddress,
-            htlc.resolverAddress,
-            htlc.amount,
-            htlc.deadline,
-            htlc.claimed
-        );
+        return htlc;
     }
     
     /**
@@ -208,7 +243,7 @@ contract DestinationHTLC {
      */
     function isClaimable(bytes32 secretHash) external view returns (bool) {
         HTLC storage htlc = htlcs[secretHash];
-        return htlc.userAddress != address(0) && !htlc.claimed && block.timestamp < htlc.deadline;
+        return htlc.userAddress != address(0) && block.timestamp < htlc.deadline;
     }
     
     /**
@@ -218,6 +253,6 @@ contract DestinationHTLC {
      */
     function isRefundable(bytes32 secretHash) external view returns (bool) {
         HTLC storage htlc = htlcs[secretHash];
-        return htlc.userAddress != address(0) && !htlc.claimed && block.timestamp >= htlc.deadline;
+        return htlc.userAddress != address(0) && block.timestamp >= htlc.deadline;
     }
 }

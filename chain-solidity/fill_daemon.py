@@ -119,8 +119,8 @@ def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[st
     # Command line arguments take precedence
     if args.network:
         config['network'] = args.network
-    if args.contract_address:
-        config['contract_address'] = args.contract_address
+    if args.dhtlc_address:
+        config['dhtlc_address'] = args.dhtlc_address
     if args.node_url:
         config['node_url'] = args.node_url
     if args.chain_id:
@@ -129,7 +129,7 @@ def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[st
     # Ensure we have required fields
     if 'network' not in config:
         raise ValueError("Network must be specified in params file or command line")
-    if 'contract_address' not in config:
+    if 'dhtlc_address' not in config:
         raise ValueError("Contract address must be specified in params file or command line")
     
     # Fill in defaults if not specified
@@ -149,7 +149,7 @@ class HTLCFillClient:
     def __init__(self, config: Dict[str, Any], resolver_account: Account):
         self.network = config['network']
         self.config = config
-        self.contract_address = AsyncWeb3.to_checksum_address(config['contract_address'])
+        self.dhtlc_address = AsyncWeb3.to_checksum_address(config['dhtlc_address'])
         self.resolver_account = resolver_account
         
         # Initialize web3 client
@@ -157,7 +157,7 @@ class HTLCFillClient:
         
         # Create contract instance
         self.contract = self.w3.eth.contract(
-            address=self.contract_address,
+            address=self.dhtlc_address,
             abi=CONTRACT_ABI
         )
     
@@ -276,7 +276,7 @@ class FillDaemon:
     async def health_check(self) -> Dict[str, Any]:
         """Perform a comprehensive health check including contract verification."""
         # Test secret for verification
-        test_secret = HexBytes("0x" + "test_secret_123".encode().hex().ljust(64, '0'))
+        test_secret = HexBytes(os.urandom(32)) # "0x" + "test_secret_123".encode().hex().ljust(64, '0'))
         expected_hash = HexBytes(hashlib.sha256(test_secret).digest())
         
         print("🔍 Performing contract health check...")
@@ -296,7 +296,7 @@ class FillDaemon:
                 "hash_verification": "passed",
                 "network": self.network,
                 "resolver_address": self.resolver_account.address,
-                "contract_address": self.client.contract_address,
+                "dhtlc_address": self.client.dhtlc_address,
                 "node_url": self.config.get('node_url'),
                 "chain_id": self.config.get('chain_id')
             }
@@ -309,7 +309,7 @@ class FillDaemon:
                 "error": f"Expected {expected_hash.hex()}, got {contract_hash.hex()}",
                 "network": self.network,
                 "resolver_address": self.resolver_account.address,
-                "contract_address": self.client.contract_address
+                "dhtlc_address": self.client.dhtlc_address
             }
     
     async def create_htlc_transaction(
@@ -540,7 +540,7 @@ async def main():
     # Network and contract configuration (can override params file)
     parser.add_argument("--network", choices=DEFAULT_NETWORK_CONFIGS.keys(),
                        help="Network to connect to")
-    parser.add_argument("--contract-address", help="Address where the HTLC contract is deployed")
+    parser.add_argument("--dhtlc-address", help="Address where the HTLC contract is deployed")
     parser.add_argument("--node-url", help="RPC node URL")
     parser.add_argument("--chain-id", type=int, help="Chain ID")
     
@@ -563,7 +563,7 @@ async def main():
         
         print(f"📋 Configuration loaded:")
         print(f"   Network: {config['network']}")
-        print(f"   Contract: {config['contract_address']}")
+        print(f"   Contract: {config['dhtlc_address']}")
         print(f"   Node URL: {config['node_url']}")
         print(f"   Chain ID: {config.get('chain_id', 'auto-detect')}")
         

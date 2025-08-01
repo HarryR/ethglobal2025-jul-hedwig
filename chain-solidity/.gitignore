@@ -4,3 +4,5 @@ cache
 src
 pnpm-lock.yaml
 node_modules/
+old/
+*.json

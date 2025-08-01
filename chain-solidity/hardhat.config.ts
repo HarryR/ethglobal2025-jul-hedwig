@@ -42,20 +42,20 @@ task(TASK_EXPORT_ABIS, async (_args, hre) => {
   );
 }).setDescription('Saves ABI and bytecode to the "abis" directory');
 
-task('info', async (_args, hre) => {
-  const [signer] = await hre.ethers.getSigners();
-  console.log('Address', signer.address);
-  console.log('Network', hre.network.name)
-}).setDescription('Show some info');
-
 task('deploy', async (_args, hre) => {
   const {ethers} = hre;
 
   const dhtlc_factory = await ethers.getContractFactory('DestinationHTLC');
   const dhtlc = await dhtlc_factory.deploy();
-  const tx = dhtlc.deploymentTransaction()!;
-  console.log('tx', tx.hash)
-  await tx.wait();
+  const dhtlc_tx = dhtlc.deploymentTransaction()!;
+  console.log('DestinationHTLC tx', dhtlc_tx.hash)
+  await dhtlc_tx.wait();
+
+  const shtlc_factory = await ethers.getContractFactory('SourceHTLC');
+  const shtlc = await shtlc_factory.deploy();
+  const shtlc_tx = shtlc.deploymentTransaction()!;
+  console.log('SourceHTLC tx', shtlc_tx.hash)
+  await shtlc_tx.wait();
 
   const chainId = (await ethers.provider.getNetwork()).chainId;
 
@@ -63,6 +63,7 @@ task('deploy', async (_args, hre) => {
     'node_url': (hre.network.config as any).url,
     'chain_id': chainId.toString(10),
     'dhtlc_address': await dhtlc.getAddress(),
+    'shtlc_address': await shtlc.getAddress(),
     'network': hre.network.name,
   };
   console.log('Config', config);

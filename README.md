@@ -44,3 +44,6 @@ Music makes the world go round ☺️🎶🪩🎆
  * https://soundcloud.com/discoanon/hot-to-the-touch-episode-268
  * magnet:?xt=urn:btih:2976448c1a5c514937341c17ba354cc988f49924
  * https://soundcloud.com/discowaltons/ep11-poco-the-disco-waltons-mix-sessions-20th-july-2025
+ * https://www.youtube.com/watch?v=QbWCjU2M5cQ
+ * https://soundcloud.com/wearestudio/efan-dj-set-ohlala-festival-2025-uk-garage-bass-music
+ * https://www.youtube.com/watch?v=d786iH20YRw

@@ -18,269 +18,116 @@ from typing import Any, Dict, Optional
 
 from quart import Quart, request, jsonify
 from web3 import AsyncWeb3
-from web3.exceptions import Web3Exception, ContractLogicError
+from web3.exceptions import ContractLogicError
 from eth_account import Account
-from eth_account.messages import encode_structured_data
-from eth_typing import ChecksumAddress, HexStr
 from hexbytes import HexBytes
 
-# Default network configurations
-DEFAULT_NETWORK_CONFIGS = {
-    "localhost": {
-        "node_url": "http://127.0.0.1:8545",
-        "chain_id": 31337,  # Hardhat default
-    },
-    "sepolia": {
-        "node_url": "https://ethereum-sepolia-rpc.publicnode.com",
-        "chain_id": 11155111,
-    },
-    "mainnet": {
-        "node_url": "https://ethereum-rpc.publicnode.com", 
-        "chain_id": 1,
-    },
-    "arbitrum": {
-        "node_url": "https://arbitrum-one-rpc.publicnode.com",
-        "chain_id": 42161,
-    },
-    "base": {
-        "node_url": "https://base-rpc.publicnode.com",
-        "chain_id": 8453,
-    },
-    "polygon": {
-        "node_url": "https://polygon-bor-rpc.publicnode.com",
-        "chain_id": 137,
-    }
-}
-
 # Contract ABI for DestinationHTLC (view functions only)
-CONTRACT_ABI = [
-    {
-        "type": "function",
-        "name": "getHTLCInfo", 
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [
-            {"name": "userAddress", "type": "address", "internalType": "address"},
-            {"name": "resolverAddress", "type": "address", "internalType": "address"},
-            {"name": "amount", "type": "uint256", "internalType": "uint256"},
-            {"name": "deadline", "type": "uint256", "internalType": "uint256"},
-            {"name": "claimed", "type": "bool", "internalType": "bool"}
-        ],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
-        "name": "hashSecret",
-        "inputs": [{"name": "secret", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "", "type": "bytes32", "internalType": "bytes32"}],
-        "stateMutability": "pure"
-    }
-]
+with open('abis/DestinationHTLC.json', 'r') as handle:
+    CONTRACT_ABI = json.load(handle)
 
-
-def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[str, Any]:
-    """Load configuration from params file and command line arguments."""
-    config = {}
+def load_config(params_file: str) -> Dict[str, Any]:
+    """Load configuration from params file."""
+    if not os.path.exists(params_file):
+        raise ValueError(f"Params file {params_file} not found")
     
-    # Load from params file first
-    if params_file and os.path.exists(params_file):
-        print(f"📄 Loading config from {params_file}")
-        with open(params_file, 'r') as f:
-            config = json.load(f)
-    
-    # Command line arguments take precedence
-    if args.network:
-        config['network'] = args.network
-    if args.contract_address:
-        config['contract_address'] = args.contract_address
-    if args.node_url:
-        config['node_url'] = args.node_url
-    if args.chain_id:
-        config['chain_id'] = args.chain_id
+    with open(params_file, 'r') as f:
+        config = json.load(f)
     
     # Ensure we have required fields
-    if 'network' not in config:
-        raise ValueError("Network must be specified in params file or command line")
-    if 'contract_address' not in config:
-        raise ValueError("Contract address must be specified in params file or command line")
-    
-    # Fill in defaults if not specified
-    network = config['network']
-    if network in DEFAULT_NETWORK_CONFIGS:
-        defaults = DEFAULT_NETWORK_CONFIGS[network]
-        for key, value in defaults.items():
-            if key not in config:
-                config[key] = value
+    required_fields = ['node_url', 'chain_id', 'dhtlc_address', 'network']
+    for field in required_fields:
+        if field not in config:
+            raise ValueError(f"Required field '{field}' missing from params file")
     
     return config
-
-
-class HTLCArbitratorClient:
-    """Ethereum HTLC arbitrator client using web3.py async."""
-    
-    def __init__(self, config: Dict[str, Any]):
-        self.network = config['network']
-        self.config = config
-        self.contract_address = AsyncWeb3.to_checksum_address(config['contract_address'])
-        
-        # Initialize web3 client
-        self.w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(config['node_url']))
-        
-        # Create contract instance
-        self.contract = self.w3.eth.contract(
-            address=self.contract_address,
-            abi=CONTRACT_ABI
-        )
-    
-    async def close(self):
-        """Clean up resources."""
-        if hasattr(self.w3.provider, 'session') and self.w3.provider.session:
-            await self.w3.provider.session.close()
-    
-    async def get_htlc_info(self, secret_hash: HexBytes) -> Optional[Dict[str, Any]]:
-        """Get HTLC information from the contract."""
-        try:
-            result = await self.contract.functions.getHTLCInfo(secret_hash).call()
-            
-            return {
-                "user_address": result[0],
-                "resolver_address": result[1], 
-                "amount": result[2],
-                "deadline": result[3],
-                "claimed": result[4]
-            }
-        except ContractLogicError:
-            # HTLC doesn't exist
-            return None
-        except Exception as e:
-            print(f"❌ Error getting HTLC info: {e}")
-            return None
-    
-    async def hash_secret(self, secret: HexBytes) -> HexBytes:
-        """Call the contract's hashSecret view function."""
-        try:
-            result = await self.contract.functions.hashSecret(secret).call()
-            return HexBytes(result)
-        except Exception as e:
-            print(f"❌ Error hashing secret: {e}")
-            # Fallback to local calculation
-            return HexBytes(hashlib.sha256(secret).digest())
 
 
 class ArbitratorDaemon:
     """HTLC Arbitrator Daemon that signs deposit proofs using EIP-712."""
     
     def __init__(self, config: Dict[str, Any], arbitrator_account: Account):
-        self.network = config['network'] 
         self.config = config
+        self.network = config['network']
         self.arbitrator_account = arbitrator_account
         
-        # Initialize client
-        self.client = HTLCArbitratorClient(config)
+        # Initialize web3 client
+        self.w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(config['node_url']))
         
-        # EIP-712 Domain for signing
-        self.domain = {
-            'name': 'HTLC Arbitrator',
-            'version': '1',
-            'chainId': config.get('chain_id', 1),
-            'verifyingContract': self.client.contract_address
-        }
-        
-        # EIP-712 Types for HTLC Decision
-        self.types = {
-            'EIP712Domain': [
-                {'name': 'name', 'type': 'string'},
-                {'name': 'version', 'type': 'string'},
-                {'name': 'chainId', 'type': 'uint256'},
-                {'name': 'verifyingContract', 'type': 'address'}
-            ],
-            'HTLCDecision': [
-                {'name': 'status', 'type': 'uint8'},
-                {'name': 'secretHash', 'type': 'bytes32'},
-                {'name': 'deadline', 'type': 'uint256'},
-                {'name': 'destinationChain', 'type': 'bytes32'},
-                {'name': 'destinationToken', 'type': 'bytes32'},
-                {'name': 'destinationAmount', 'type': 'uint256'},
-                {'name': 'destinationAddress', 'type': 'address'}
-            ]
-        }
-    
+        # Create contract instance
+        self.dhtlc_address = AsyncWeb3.to_checksum_address(config['dhtlc_address'])
+        self.contract = self.w3.eth.contract(
+            address=self.dhtlc_address,
+            abi=CONTRACT_ABI
+        )
+
     async def initialize(self):
         """Initialize the daemon by checking connection."""
-        is_connected = await self.client.w3.is_connected()
+        is_connected = await self.w3.is_connected()
         if not is_connected:
             raise ConnectionError(f"Could not connect to {self.config['node_url']}")
         
         # Get chain ID to verify network
-        chain_id = await self.client.w3.eth.chain_id
-        expected_chain_id = self.config.get('chain_id')
-        if expected_chain_id and chain_id != expected_chain_id:
-            print(f"⚠️  Warning: Connected to chain ID {chain_id}, expected {expected_chain_id}")
-            # Update domain with actual chain ID
-            self.domain['chainId'] = chain_id
+        chain_id = int(await self.w3.eth.chain_id)
+        expected_chain_id = int(self.config.get('chain_id'))
+        if not expected_chain_id or chain_id != expected_chain_id:
+            raise RuntimeError(f"⚠️  Warning: Connected to chain ID {chain_id}, expected {expected_chain_id}")
         
         print(f"✅ Arbitrator address: {self.arbitrator_account.address}")
-        print(f"✅ Contract address: {self.client.contract_address}")
+        print(f"✅ Contract address: {self.dhtlc_address}")
         print(f"✅ Chain ID: {chain_id}")
     
-    async def get_balance(self, address: str) -> int:
-        """Get ETH balance of address in wei."""
-        checksum_address = AsyncWeb3.to_checksum_address(address)
-        return await self.client.w3.eth.get_balance(checksum_address)
-    
-    async def get_htlc_info(self, secret_hash: str) -> Optional[Dict[str, Any]]:
-        """Get HTLC info by secret hash."""
-        if secret_hash.startswith('0x'):
-            secret_hash = secret_hash[2:]
-        
-        # Pad to 32 bytes if needed
-        if len(secret_hash) < 64:
-            secret_hash = secret_hash.ljust(64, '0')
+    async def get_htlc_info(self, secret_hash: HexBytes) -> Optional[Dict[str, Any]]:
+        """Get HTLC information from the contract."""
+        try:
+            result = await self.contract.functions.getHTLCInfo(secret_hash).call()
             
-        secret_hash_bytes = HexBytes(secret_hash)
-        return await self.client.get_htlc_info(secret_hash_bytes)
+            # Match the actual Solidity struct: (userAddress, resolverAddress, amount, deadline)
+            return {
+                "user_address": result[0],
+                "resolver_address": result[1], 
+                "amount": result[2],
+                "deadline": result[3]
+            }
+        except ContractLogicError:
+            # HTLC doesn't exist
+            return None
+    
+    async def does_htlc_exist(self, secret_hash: HexBytes) -> bool:
+        """Check if HTLC exists."""
+        return await self.contract.functions.doesHTLCExist(secret_hash).call()
+    
+    async def decision_make(self, status: bool, secret_hash: HexBytes, deadline: int,
+                           destination_chain: HexBytes, destination_token: bytes,
+                           destination_amount: int, destination_address: bytes):
+        """Call the contract's decision_make function to get ABI encoded decision and hash."""
+        return await self.contract.functions.decision_make(
+            status, secret_hash, deadline, destination_chain, 
+            destination_token, destination_amount, destination_address
+        ).call()
+    
+    async def hash_secret(self, secret: HexBytes) -> HexBytes:
+        """Call the contract's hashSecret view function."""
+        result = await self.contract.functions.hashSecret(secret).call()
+        return HexBytes(result)
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self):
         """Perform a comprehensive health check including contract verification."""
         # Test secret for verification
-        test_secret = HexBytes("0x" + "test_secret_123".encode().hex().ljust(64, '0'))
+        test_secret = HexBytes(os.urandom(32))
         expected_hash = HexBytes(hashlib.sha256(test_secret).digest())
         
-        print("🔍 Performing contract health check...")
-        print(f"   Testing with secret: {test_secret.hex()}")
-        print(f"   Expected hash: {expected_hash.hex()}")
-        
         # Call the contract's hashSecret function
-        contract_hash = await self.client.hash_secret(test_secret)
-        print(f"   Contract returned: {contract_hash.hex()}")
+        contract_hash = await self.hash_secret(test_secret)
         
         # Verify the hash matches
-        if contract_hash == expected_hash:
-            print("✅ Contract health check passed!")
-            return {
-                "status": "healthy",
-                "contract_responsive": True,
-                "hash_verification": "passed",
-                "network": self.network,
-                "arbitrator_address": self.arbitrator_account.address,
-                "contract_address": self.client.contract_address,
-                "node_url": self.config.get('node_url'),
-                "chain_id": self.config.get('chain_id')
-            }
-        else:
-            print("❌ Hash verification failed!")
-            return {
-                "status": "unhealthy",
-                "contract_responsive": True,
-                "hash_verification": "failed",
-                "error": f"Expected {expected_hash.hex()}, got {contract_hash.hex()}",
-                "network": self.network,
-                "arbitrator_address": self.arbitrator_account.address,
-                "contract_address": self.client.contract_address
-            }
+        if contract_hash != expected_hash:
+            raise ValueError(f"Contract hash verification failed. Expected {expected_hash.hex()}, got {contract_hash.hex()}")
 
     async def close(self):
         """Clean up resources."""
-        await self.client.close()
+        if hasattr(self.w3.provider, 'session') and self.w3.provider.session:
+            await self.w3.provider.session.close()
 
 
 def parse_hex(x: str | bytes) -> bytes:
@@ -290,51 +137,6 @@ def parse_hex(x: str | bytes) -> bytes:
     if x.startswith('0x'):
         x = x[2:]
     return bytes.fromhex(x)
-
-def arbitrator_sign(
-    account: Account,
-    domain: Dict[str, Any],
-    types: Dict[str, Any],
-    status: int,
-    secret_hash: bytes,
-    deadline: int,
-    destination_chain: bytes,
-    destination_token: bytes,
-    destination_amount: int,
-    destination_address: str
-) -> Dict[str, str]:
-    """Sign HTLC decision using EIP-712."""
-    
-    # Prepare the message data
-    message = {
-        'status': status,
-        'secretHash': secret_hash,
-        'deadline': deadline,
-        'destinationChain': destination_chain,
-        'destinationToken': destination_token,
-        'destinationAmount': destination_amount,
-        'destinationAddress': destination_address
-    }
-    
-    # Create structured data
-    structured_data = {
-        'types': types,
-        'domain': domain,
-        'primaryType': 'HTLCDecision',
-        'message': message
-    }
-    
-    # Encode and sign
-    encoded = encode_structured_data(structured_data)
-    signed_message = account.sign_message(encoded)
-    
-    return {
-        'message': message,
-        'signature': signed_message.signature.hex(),
-        'recovery_id': signed_message.v,
-        'r': hex(signed_message.r),
-        's': hex(signed_message.s)
-    }
 
 
 def create_account(args: argparse.Namespace) -> Account:
@@ -372,6 +174,8 @@ def create_quart_app(daemon: ArbitratorDaemon) -> Quart:
     @app.route('/ethereum/<network>/arbitrate.ethereum', methods=['POST'])
     async def arbitrate_ethereum(network: str):
         """Arbitrate an Ethereum HTLC request."""
+        
+        # Validate network matches daemon configuration  
         if network != daemon.network:
             return jsonify({
                 "success": False,
@@ -388,88 +192,124 @@ def create_quart_app(daemon: ArbitratorDaemon) -> Quart:
         destination_amount = int(data['destination_amount'])
         destination_chain = parse_hex(data['destination_chain'])
         destination_token = parse_hex(data['destination_token'])
-        destination_address = data['destination_address']  # Keep as string for EIP-712
+        destination_address = data['destination_address']
 
-        # Native ETH token is represented as zero address
-        expected_token = b'\x00' * 32  # 32 zero bytes
+        # Check if HTLC exists
+        htlc_exists = await daemon.does_htlc_exist(HexBytes(secret_hash))
         
-        # Expected chain identifier
-        expected_chain = f"ethereum-{network}"
-        expected_chain_bytes = expected_chain.encode('utf-8')
-        expected_chain_hash_bytes = hashlib.sha256(expected_chain_bytes).digest()
-        
-        if destination_chain != expected_chain_hash_bytes:
-            return jsonify({
-                "success": False,
-                "error": f"Destination chain mismatch, got {destination_chain.hex()} expected {expected_chain_hash_bytes.hex()}",
-                "code": "WRONG_CHAIN",
-            }), 400
+        # Get HTLC info if it exists (for validation)
+        info = None
+        if htlc_exists:
+            info = await daemon.get_htlc_info(HexBytes(secret_hash))
+            if not info:
+                return jsonify({
+                    "success": False,
+                    "error": "HTLC exists but info retrieval failed",
+                    "code": "CONTRACT_ERROR",
+                }), 500
 
-        # Get HTLC info from contract
-        info = await daemon.get_htlc_info(secret_hash.hex())
-        if not info:
-            return jsonify({
-                "success": False,
-                "error": "HTLC not found",
-                "code": "HTLC_NOT_FOUND",
-            }), 404
+            # Validate parameters against contract data
+            if deadline != info['deadline']:
+                return jsonify({
+                    "success": False,
+                    "error": f"Deadline mismatch, got {deadline} expected {info['deadline']}",
+                    "code": "WRONG_DEADLINE",
+                }), 400
 
-        # Validate parameters against contract data
-        if deadline != info['deadline']:
-            return jsonify({
-                "success": False,
-                "error": f"Deadline mismatch, got {deadline} expected {info['deadline']}",
-                "code": "WRONG_DEADLINE",
-            }), 400
+            # Convert destination address to checksum format for comparison
+            destination_address_checksum = AsyncWeb3.to_checksum_address(destination_address)
+            if destination_address_checksum != info['user_address']:
+                return jsonify({
+                    "success": False,
+                    "error": f"Destination address mismatch, got {destination_address_checksum} expected {info['user_address']}",
+                    "code": "WRONG_ADDRESS",
+                }), 400
 
-        if destination_token != expected_token:
-            return jsonify({
-                "success": False,
-                "error": f"Destination token mismatch, got {destination_token.hex()} expected {expected_token.hex()}",
-                "code": "WRONG_TOKEN",
-            }), 400
+            if destination_amount != info['amount']:
+                return jsonify({
+                    "success": False,
+                    "error": f"Destination amount mismatch, got {destination_amount} expected {info['amount']}",
+                    "code": "WRONG_AMOUNT",
+                }), 400
 
-        # Convert destination address to checksum format for comparison
-        destination_address_checksum = AsyncWeb3.to_checksum_address(destination_address)
-        if destination_address_checksum != info['user_address']:
-            return jsonify({
-                "success": False,
-                "error": f"Destination address mismatch, got {destination_address_checksum} expected {info['user_address']}",
-                "code": "WRONG_ADDRESS",
-            }), 400
-
-        if destination_amount != info['amount']:
-            return jsonify({
-                "success": False,
-                "error": f"Destination amount mismatch, got {destination_amount} expected {info['amount']}",
-                "code": "WRONG_AMOUNT",
-            }), 400
-
-        # Determine status (0 = valid, 1 = expired)
+        # Determine current state
         current_time = int(time.time())
-        status = 1 if current_time >= deadline else 0
+        deadline_passed = current_time >= deadline
 
-        # Sign the decision using EIP-712
-        signature_data = arbitrator_sign(
-            account=daemon.arbitrator_account,
-            domain=daemon.domain,
-            types=daemon.types,
-            status=status,
-            secret_hash=secret_hash,
-            deadline=deadline,
-            destination_chain=destination_chain,
-            destination_token=destination_token,
-            destination_amount=destination_amount,
-            destination_address=destination_address_checksum
+        # Binary decision logic:
+        # Status True: Before deadline AND HTLC exists → Success
+        # Status False: After deadline AND HTLC doesn't exist → Failure
+        # Everything else: Error
+        if not deadline_passed and htlc_exists:
+            status = True  # Success: deposited on time
+        elif deadline_passed and not htlc_exists:
+            status = False  # Failure: didn't deposit
+        else:
+            # Error cases
+            if deadline_passed and htlc_exists:
+                error_msg = "HTLC exists but deadline has passed (late deposit)"
+                error_code = "LATE_DEPOSIT"
+            else:  # not deadline_passed and not htlc_exists
+                error_msg = "Deadline hasn't passed but HTLC doesn't exist (premature request)"
+                error_code = "PREMATURE_REQUEST"
+            
+            return jsonify({
+                "success": False,
+                "error": error_msg,
+                "code": error_code,
+            }), 400
+
+        # Get decision structure and hash from contract
+        decision_result = await daemon.decision_make(
+            status,
+            HexBytes(secret_hash),
+            deadline,
+            HexBytes(destination_chain),
+            destination_token,
+            destination_amount,
+            destination_address.encode('utf-8')
         )
+        
+        # decision_result is a tuple: (abi_encoded_decision, struct_hash)
+        abi_encoded_decision = decision_result[0]
+        struct_hash = decision_result[1]
+
+        # Sign the struct hash
+        # Sign the raw hash directly since contract already did EIP-712 encoding
+        signed_message = daemon.arbitrator_account.signHash(struct_hash)
+        
+        # Create both r,s,v and r,vs formats
+        r = signed_message.r
+        s = signed_message.s  
+        v = signed_message.v
+        
+        # Pack r and vs (v and s combined)
+        vs = (v << 255) | s
+        
+        signature_data = {
+            'r': hex(r),
+            's': hex(s),
+            'v': v,
+            'vs': hex(vs),
+            'signature': signed_message.signature.hex()
+        }
 
         return jsonify({
             'success': True,
-            'info': info,
+            'decision': {
+                'decision': status,
+                'secretHash': '0x' + secret_hash.hex(),
+                'deadline': deadline,
+                'destinationChain': '0x' + destination_chain.hex(),
+                'destinationToken': '0x' + destination_token.hex(),
+                'destinationAmount': destination_amount,
+                'destinationAddress': destination_address
+            },
+            'structHash': '0x' + struct_hash.hex(),
+            'abiEncodedDecision': '0x' + abi_encoded_decision.hex(),
             'signature': signature_data,
             'arbitrator_address': daemon.arbitrator_account.address,
-            'domain': daemon.domain,
-            'types': daemon.types
+            'htlc_info': info
         })
 
     @app.route('/ethereum/<network>/health.arbitrator', methods=['GET'])
@@ -483,10 +323,13 @@ def create_quart_app(daemon: ArbitratorDaemon) -> Quart:
                 "error": f"Network mismatch. Daemon configured for {daemon.network}, request for {network}"
             }), 400
         
-        # Perform async health check
-        health_result = await daemon.health_check()
-        status_code = 200 if health_result["status"] == "healthy" else 503
-        return jsonify(health_result), status_code
+        await daemon.health_check()
+        return jsonify({
+            "status": "healthy",
+            "arbitrator_address": daemon.arbitrator_account.address,
+            "dhtlc_address": daemon.dhtlc_address,
+            "network": daemon.network
+        })
                 
     return app
 
@@ -495,18 +338,11 @@ async def main():
     """Main function to start the arbitrator daemon."""
     parser = argparse.ArgumentParser(description="HTLC Arbitrator Daemon for Ethereum")
     
-    # Configuration file
-    parser.add_argument("--params-file", help="JSON file containing deployment parameters")
-    
-    # Network and contract configuration (can override params file)
-    parser.add_argument("--network", choices=DEFAULT_NETWORK_CONFIGS.keys(),
-                       help="Network to connect to")
-    parser.add_argument("--contract-address", help="Address where the HTLC contract is deployed")
-    parser.add_argument("--node-url", help="RPC node URL")
-    parser.add_argument("--chain-id", type=int, help="Chain ID")
+    # Configuration file (required)
+    parser.add_argument("params_file", help="JSON file containing deployment parameters")
     
     # Account configuration (mutually exclusive)
-    account_group = parser.add_mutually_exclusive_group()
+    account_group = parser.add_mutually_exclusive_group(required=True)
     account_group.add_argument("--private-key", help="Private key in hex format")
     account_group.add_argument("--private-key-env", help="Environment variable containing private key")    
     account_group.add_argument("--random-key", action="store_true", help="Generate random account")
@@ -518,17 +354,15 @@ async def main():
     args = parser.parse_args()
     
     # Load configuration
-    config = load_config(args.params_file, args)
+    config = load_config(args.params_file)
     
     print(f"📋 Configuration loaded:")
-    print(f"   Network: {config['network']}")
-    print(f"   Contract: {config['contract_address']}")
+    print(f"   Contract: {config['dhtlc_address']}")
     print(f"   Node URL: {config['node_url']}")
-    print(f"   Chain ID: {config.get('chain_id', 'auto-detect')}")
+    print(f"   Chain ID: {config['chain_id']}")
     
     # Create account
     arbitrator_account = create_account(args)
-    print(f"🔑 Arbitrator address: {arbitrator_account.address}")
     
     # Initialize daemon
     daemon = ArbitratorDaemon(
@@ -540,15 +374,7 @@ async def main():
     await daemon.initialize()
     
     # Perform initial health check
-    print("🏥 Performing initial health check...")
-    health_result = await daemon.health_check()
-    
-    if health_result["status"] != "healthy":
-        print("❌ Initial health check failed!")
-        print(f"   Error: {health_result.get('error', 'Unknown error')}")
-        sys.exit(1)
-    
-    print("✅ Initial health check passed - daemon is ready!")
+    await daemon.health_check()
     
     # Create Quart app
     app = create_quart_app(daemon)

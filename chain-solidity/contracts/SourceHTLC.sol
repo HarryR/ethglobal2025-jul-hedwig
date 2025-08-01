@@ -173,12 +173,12 @@ contract SourceHTLC {
         bool status
     )
         public view
-        returns (ArbitratorDecision memory decision, bytes32 structHash)
+        returns (bytes memory abiEncodedDecision, bytes32 structHash)
     {
         Order storage order = activeEscrows[orderHash];
         if (order.userAddress == address(0)) revert EscrowNotFound();
 
-        decision = ArbitratorDecision({
+        ArbitratorDecision memory decision = ArbitratorDecision({
             decision: status,
             secretHash: order.secretHash,
             deadline: order.resolverActionDeadline,
@@ -189,6 +189,7 @@ contract SourceHTLC {
         });
 
         structHash = internal_hashDecision(decision);
+        abiEncodedDecision = abi.encode(decision);
     }
 
     // Verify arbitrator decision using EIP-712

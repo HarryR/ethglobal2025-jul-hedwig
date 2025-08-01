@@ -76,9 +76,6 @@ contract DestinationHTLC {
     constructor() {
         // No initialization needed - completely trustless contract
     }
-    
-    // ============ External Functions ============
-
 
     function internal_hashDecision(ArbitratorDecision memory decision)
         internal pure
@@ -106,9 +103,9 @@ contract DestinationHTLC {
         bytes memory destinationAddress      
     )
         public pure
-        returns (ArbitratorDecision memory decision, bytes32 structHash)
+        returns (bytes memory abiEncodedDecision, bytes32 structHash)
     {
-        decision = ArbitratorDecision({
+        ArbitratorDecision memory decision = ArbitratorDecision({
             decision: status,
             secretHash: secretHash,
             deadline: deadline,
@@ -119,6 +116,7 @@ contract DestinationHTLC {
         });
 
         structHash = internal_hashDecision(decision);
+        abiEncodedDecision = abi.encode(decision);
     }
     
     /**
@@ -156,19 +154,21 @@ contract DestinationHTLC {
      * @dev Anyone can call this function, making it gasless for the actual user
      * @param secret The preimage of the secret hash
      */
-    function revealSecret(bytes32 secret) external {
+    function revealSecret(bytes32 secret)
+        external
+    {
         bytes32 secretHash = sha256(abi.encodePacked(secret));
         
         if (htlcs[secretHash].userAddress == address(0)) revert HTLCNotFound();
         
         HTLC storage htlc = htlcs[secretHash];
         
-        // Transfer funds to user
         uint256 amount = htlc.amount;
         address userAddress = htlc.userAddress;
 
         delete htlcs[secretHash];
         
+        // Transfer funds to user
         (bool success, ) = payable(userAddress).call{value: amount}("");
         if (!success) revert TransferFailed();
         

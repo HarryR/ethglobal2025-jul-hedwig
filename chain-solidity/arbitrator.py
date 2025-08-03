@@ -276,7 +276,7 @@ def create_quart_app(daemon: ArbitratorDaemon) -> Quart:
 
         # Sign the struct hash
         # Sign the raw hash directly since contract already did EIP-712 encoding
-        signed_message = daemon.arbitrator_account.signHash(struct_hash)
+        signed_message = daemon.arbitrator_account.unsafe_sign_hash(struct_hash)
         
         # Create both r,s,v and r,vs formats
         r = signed_message.r

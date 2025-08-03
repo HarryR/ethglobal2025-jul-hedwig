@@ -51,59 +51,9 @@ DEFAULT_NETWORK_CONFIGS = {
     }
 }
 
-# Contract ABI for DestinationHTLC (only functions we need)
-CONTRACT_ABI = [
-    {
-        "type": "function",
-        "name": "createHTLC",
-        "inputs": [
-            {"name": "secretHash", "type": "bytes32", "internalType": "bytes32"},
-            {"name": "userAddress", "type": "address", "internalType": "address"},
-            {"name": "deadline", "type": "uint256", "internalType": "uint256"}
-        ],
-        "outputs": [],
-        "stateMutability": "payable"
-    },
-    {
-        "type": "function",
-        "name": "hashSecret",
-        "inputs": [{"name": "secret", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "", "type": "bytes32", "internalType": "bytes32"}],
-        "stateMutability": "pure"
-    },
-    {
-        "type": "function",
-        "name": "getHTLCInfo", 
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [
-            {"name": "userAddress", "type": "address", "internalType": "address"},
-            {"name": "resolverAddress", "type": "address", "internalType": "address"},
-            {"name": "amount", "type": "uint256", "internalType": "uint256"},
-            {"name": "deadline", "type": "uint256", "internalType": "uint256"},
-            {"name": "claimed", "type": "bool", "internalType": "bool"}
-        ],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
-        "name": "doesHTLCExist",
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "", "type": "bool", "internalType": "bool"}],
-        "stateMutability": "view"
-    },
-    {
-        "type": "event",
-        "name": "HTLCCreated",
-        "inputs": [
-            {"name": "secretHash", "type": "bytes32", "indexed": True, "internalType": "bytes32"},
-            {"name": "userAddress", "type": "address", "indexed": True, "internalType": "address"},
-            {"name": "resolverAddress", "type": "address", "indexed": True, "internalType": "address"},
-            {"name": "amount", "type": "uint256", "indexed": False, "internalType": "uint256"},
-            {"name": "deadline", "type": "uint256", "indexed": False, "internalType": "uint256"}
-        ],
-        "anonymous": False
-    }
-]
+# Contract ABI for DestinationHTLC
+with open('abis/DestinationHTLC.json', 'r') as handle:
+    DHTLC_ABI = json.load(handle)
 
 
 def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[str, Any]:
@@ -158,7 +108,7 @@ class HTLCFillClient:
         # Create contract instance
         self.contract = self.w3.eth.contract(
             address=self.dhtlc_address,
-            abi=CONTRACT_ABI
+            abi=DHTLC_ABI
         )
     
     async def close(self):

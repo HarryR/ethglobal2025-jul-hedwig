@@ -52,84 +52,8 @@ DEFAULT_NETWORK_CONFIGS = {
 }
 
 # Contract ABI for DestinationHTLC
-CONTRACT_ABI = [
-    {
-        "type": "function",
-        "name": "revealSecret",
-        "inputs": [{"name": "secret", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [],
-        "stateMutability": "nonpayable"
-    },
-    {
-        "type": "function", 
-        "name": "claimRefund",
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [],
-        "stateMutability": "nonpayable"
-    },
-    {
-        "type": "function",
-        "name": "getHTLCInfo", 
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [
-            {"name": "userAddress", "type": "address", "internalType": "address"},
-            {"name": "resolverAddress", "type": "address", "internalType": "address"},
-            {"name": "amount", "type": "uint256", "internalType": "uint256"},
-            {"name": "deadline", "type": "uint256", "internalType": "uint256"},
-            {"name": "claimed", "type": "bool", "internalType": "bool"}
-        ],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
-        "name": "doesHTLCExist",
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "", "type": "bool", "internalType": "bool"}],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
-        "name": "hashSecret",
-        "inputs": [{"name": "secret", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "", "type": "bytes32", "internalType": "bytes32"}],
-        "stateMutability": "pure"
-    },
-    {
-        "type": "function",
-        "name": "isClaimable",
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "claimable", "type": "bool", "internalType": "bool"}],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
-        "name": "isRefundable", 
-        "inputs": [{"name": "secretHash", "type": "bytes32", "internalType": "bytes32"}],
-        "outputs": [{"name": "refundable", "type": "bool", "internalType": "bool"}],
-        "stateMutability": "view"
-    },
-    {
-        "type": "event",
-        "name": "SecretRevealed",
-        "inputs": [
-            {"name": "secretHash", "type": "bytes32", "indexed": True, "internalType": "bytes32"},
-            {"name": "secret", "type": "bytes32", "indexed": False, "internalType": "bytes32"},
-            {"name": "userAddress", "type": "address", "indexed": True, "internalType": "address"},
-            {"name": "amount", "type": "uint256", "indexed": False, "internalType": "uint256"}
-        ],
-        "anonymous": False
-    },
-    {
-        "type": "event",
-        "name": "HTLCRefunded",
-        "inputs": [
-            {"name": "secretHash", "type": "bytes32", "indexed": True, "internalType": "bytes32"},
-            {"name": "resolverAddress", "type": "address", "indexed": True, "internalType": "address"},
-            {"name": "amount", "type": "uint256", "indexed": False, "internalType": "uint256"}
-        ],
-        "anonymous": False
-    }
-]
+with open('abis/DestinationHTLC.json', 'r') as handle:
+    DHTLC_ABI = json.load(handle)
 
 
 def load_config(params_file: Optional[str], args: argparse.Namespace) -> Dict[str, Any]:
@@ -184,7 +108,7 @@ class HTLCHelperClient:
         # Create contract instance
         self.contract = self.w3.eth.contract(
             address=self.dhtlc_address,
-            abi=CONTRACT_ABI
+            abi=DHTLC_ABI
         )
     
     async def close(self):
@@ -263,8 +187,7 @@ class HTLCHelperClient:
                 "user_address": result[0],
                 "resolver_address": result[1], 
                 "amount": result[2],
-                "deadline": result[3],
-                "claimed": result[4]
+                "deadline": result[3]
             }
         except ContractLogicError:
             # HTLC doesn't exist
@@ -424,13 +347,7 @@ class HelperDaemon:
                     "success": False,
                     "error": f"HTLC not found for secret hash {calculated_hash_hex}"
                 }
-            
-            if htlc_info["claimed"]:
-                return {
-                    "success": False,
-                    "error": "HTLC already claimed"
-                }
-            
+        
             # Submit reveal transaction
             tx_hash = await self.client.reveal_secret(secret_bytes)
             
@@ -492,12 +409,6 @@ class HelperDaemon:
                 return {
                     "success": False,
                     "error": f"HTLC not found for secret hash {secret_hash}"
-                }
-            
-            if htlc_info["claimed"]:
-                return {
-                    "success": False,
-                    "error": "HTLC already claimed"
                 }
             
             # Check if deadline has passed (this will be enforced by contract anyway)            

@@ -1,6 +1,7 @@
 import '@nomicfoundation/hardhat-ethers';
 import 'hardhat-tracer';
 import '@nomicfoundation/hardhat-chai-matchers';
+import "@nomicfoundation/hardhat-verify";
 import { promises as fs } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -113,6 +114,24 @@ const config: HardhatUserConfig = {
         },
       }
     ],
+  },
+  sourcify: {
+    enabled: true,
+  },
+  etherscan: {
+    apiKey: {
+      'etherlink-testnet': 'empty'
+    },
+    customChains: [
+      {
+        network: "etherlink-testnet",
+        chainId: 128123,
+        urls: {
+          apiURL: "https://testnet.explorer.etherlink.com/api",
+          browserURL: "https://testnet.explorer.etherlink.com"
+        }
+      }
+    ]
   },
   typechain: {
     target: 'ethers-v6',

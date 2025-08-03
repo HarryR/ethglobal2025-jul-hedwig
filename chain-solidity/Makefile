@@ -29,14 +29,47 @@ deploy-localnet:
 deploy-monad-testnet:
 	PRIVATE_KEY=$(PRIVATE_KEY) pnpm hardhat --network monad-testnet deploy
 
+### 
+
 deploy-etherlink-testnet:
 	PRIVATE_KEY=$(PRIVATE_KEY) pnpm hardhat --network etherlink-testnet deploy
 
 daemon-arbitrator-localnet:
 	python3 arbitrator.py --private-key $(LOCALNET_PRIVATE_KEY) hardhat_local.json
 
+daemon-quote-localnet:
+	python3 quote_daemon.py --private-key $(LOCALNET_PRIVATE_KEY) --topup 1000000 hardhat_local.json
+
 daemon-filler-localnet:
 	python3 fill_daemon.py --params-file hardhat_local.json --private-key $(LOCALNET_PRIVATE_KEY)
 
 daemon-helper-localnet:
 	python3 helper_daemon.py --params-file hardhat_local.json --private-key $(LOCALNET_PRIVATE_KEY)
+
+###
+
+daemon-arbitrator-monad-testnet:
+	python3 arbitrator.py --private-key $(PRIVATE_KEY) monad-testnet.json
+
+daemon-quote-monad-testnet:
+	python3 quote_daemon.py --private-key $(PRIVATE_KEY) --topup 1000000 monad-testnet.json
+
+daemon-filler-monad-testnet:
+	python3 fill_daemon.py --params-file monad-testnet.json --private-key $(PRIVATE_KEY)
+
+daemon-helper-monad-testnet:
+	python3 helper_daemon.py --params-file monad-testnet.json --private-key $(PRIVATE_KEY)
+
+###
+
+daemon-arbitrator-etherlink-testnet:
+	python3 arbitrator.py --private-key $(PRIVATE_KEY) etherlink-testnet.json
+
+daemon-quote-etherlink-testnet:
+	python3 quote_daemon.py --private-key $(PRIVATE_KEY) --topup 1000000 etherlink-testnet.json
+
+daemon-filler-etherlink-testnet:
+	python3 fill_daemon.py --params-file etherlink-testnet.json --private-key $(PRIVATE_KEY)
+
+daemon-helper-etherlink-testnet:
+	python3 helper_daemon.py --params-file etherlink-testnet.json --private-key $(PRIVATE_KEY)

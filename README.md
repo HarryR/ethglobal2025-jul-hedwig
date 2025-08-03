@@ -23,8 +23,8 @@ See the `chain-aptos` directory:
 
 See the `chain-solidity` directory:
 
- * Destination HTLC
- * Resolver & Arbitrator daemons
+ * Source & Destination HTLC
+ * Resolver, Arbitrator & Quote daemons
 
 ## Coding Music
 
@@ -47,3 +47,5 @@ Music makes the world go round ☺️🎶🪩🎆
  * https://www.youtube.com/watch?v=QbWCjU2M5cQ
  * https://soundcloud.com/wearestudio/efan-dj-set-ohlala-festival-2025-uk-garage-bass-music
  * https://www.youtube.com/watch?v=d786iH20YRw
+ * https://www.youtube.com/watch?v=tGm9euMP5FQ
+ * https://www.youtube.com/watch?v=IwVfDcoj-5k
